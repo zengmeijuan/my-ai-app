@@ -1,0 +1,23 @@
+[project]
+name = "my-ai-app"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "zengmj5", email = "zengmj5@annto.com.cn" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=1.4.0",
+    "httpx>=0.28.1",
+    "openai>=3.8.0",
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.2.3",
+]
+
+[project.scripts]
+my-ai-app = "my_ai_app:main"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13.0"]
+build-backend = "uv_build"
