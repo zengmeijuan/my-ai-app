@@ -7,11 +7,14 @@
 1. get_weather(city) - 查城市天气（mock 数据，真实项目应调天气 API）
 2. calculate(expression) - 算数学表达式（真算）
 3. read_file(path) - 读取文本文件内容
+4. list_dir(path) - 列出目录内容（一层）
+5. grep(pattern, path) - 在目录下递归搜索文本
 
 运行：uv run python agent.py
 """
 import os
 import json
+import re
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -62,11 +65,71 @@ def read_file(path: str) -> str:
         return f"读取错误: {e}"
 
 
+def list_dir(path: str) -> str:
+    """列出指定目录下的文件和子目录（只列一层，不递归）"""
+    try:
+        if not os.path.isdir(path):
+            return f"错误：目录不存在（或传入的是文件路径）: {path}"
+        names = sorted(os.listdir(path))
+        if not names:
+            return f"目录为空: {path}"
+        lines = []
+        for name in names:
+            tag = "[DIR]" if os.path.isdir(os.path.join(path, name)) else "[FILE]"
+            lines.append(f"{tag} {name}")
+        return f"{path}（{len(lines)} 项）:\n" + "\n".join(lines)
+    except Exception as e:
+        return f"列目录错误: {e}"
+
+
+# grep 时跳过这些目录：依赖/版本库里的匹配会淹没结果并撑爆上下文
+SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".idea", ".vscode"}
+MAX_MATCHES = 50  # 返回条数上限：工具必须自带边界，防止单次结果撑爆上下文
+
+
+def grep(pattern: str, path: str = ".") -> str:
+    """在目录下递归搜索包含指定文本/正则的行，返回 文件:行号:内容"""
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        return f"错误：无效的正则表达式: {e}"
+
+    matches = []
+    for root, dirs, files in os.walk(path):
+        # 原地过滤 dirs，os.walk 就不会进入被排除的目录
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for fname in files:
+            fpath = os.path.join(root, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                    # 前 1024 字节含 \x00 视为二进制文件，跳过（ripgrep 同款判据）
+                    if "\x00" in f.read(1024):
+                        continue
+                    f.seek(0)
+                    for lineno, line in enumerate(f, 1):
+                        if re.search(pattern, line):
+                            # 单行截断 200 字符，防 minified 文件一行几十 KB
+                            matches.append(f"{fpath}:{lineno}: {line.strip()[:200]}")
+                            if len(matches) >= MAX_MATCHES:
+                                return (
+                                    f"已找到 {MAX_MATCHES} 处匹配（达到上限，可能还有更多）:\n"
+                                    + "\n".join(matches)
+                                )
+            except OSError:
+                continue  # 无权限或打不开的文件直接跳过
+
+    if not matches:
+        return f"未找到匹配 '{pattern}'（目录: {path}）"
+    return f"共 {len(matches)} 处匹配:\n" + "\n".join(matches)
+
+
 # 工具名 -> 函数的映射（执行时用）
 TOOL_FUNCTIONS = {
     "get_weather": get_weather,
     "calculate": calculate,
     "read_file": read_file,
+    "list_dir": list_dir,
+    "grep": grep,
 }
 
 
@@ -115,6 +178,35 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_dir",
+            "description": "列出指定目录下的文件和子目录（只列一层，不递归）。当用户想看目录结构、确认路径是否存在、找文件在哪时调用。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "目录路径，相对或绝对，如 . 或 E:/workspace/studying/my-ai-app"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "grep",
+            "description": "在目录下递归搜索包含指定文本/正则的行，返回 文件:行号:内容。当用户想知道「哪个文件里有某段代码或文字」时调用。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "要搜索的文本或正则表达式，如 TOOL_FUNCTIONS"},
+                    "path": {"type": "string", "description": "要搜索的目录，默认为当前工作目录"},
+                },
+                "required": ["pattern"],
+            },
+        },
+    },
 ]
 
 
@@ -137,6 +229,8 @@ def main():
     print("  - 数学：'(25+5)*2 等于多少？'")
     print("  - 复合：'北京和上海哪个温度高？高多少？'（AI 会连续调用 2 次工具）")
     print("  - 文件：'读一下 README.md' 或 '帮我看看 E:/test/a.txt 里有什么'")
+    print("  - 目录：'看一下 E:/workspace/studying/my-ai-app 下面有什么'")
+    print("  - 搜索：'哪个文件里定义了 get_weather？' 或 '帮我找找哪里用了 dotenv'")
     print("输入 clear 清空对话（切换话题/项目前用），输入 quit 退出")
     print("=" * 40)
 
@@ -187,8 +281,6 @@ def main():
                     result = func(**args)
                 else:
                     result = f"未知工具: {name}"
-
-                print(f"  <- [工具结果] {result}")
 
                 # 把工具结果塞回 messages（特殊 role="tool"）
                 messages.append({
