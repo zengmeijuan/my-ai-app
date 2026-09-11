@@ -17,7 +17,7 @@ import json
 import re
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, APITimeoutError, APIConnectionError, APIStatusError
 
 load_dotenv()
 
@@ -212,6 +212,10 @@ TOOLS = [
 
 # ============== 3. Agent 主循环 ==============
 
+# 循环安全边界：模型陷入「反复调工具停不下来」时强制刹车
+MAX_STEPS = 10   # 单次提问最多调 LLM 几轮（每轮 LLM 都可能调工具再思考，都在烧 token）
+API_TIMEOUT = 60  # 单次 LLM API 调用的超时秒数，防止网络挂起卡死整个 agent
+
 # system prompt 提成常量：clear 重置对话时要保留它（里面有工作目录锚点）
 SYSTEM_PROMPT = (
     f"你是一个智能助手。当前工作目录是 {os.getcwd()}，用户说「当前项目」「这个项目」时指该目录下的项目。"
@@ -250,13 +254,32 @@ def main():
         messages.append({"role": "user", "content": user_input})
 
         # Agent 关键：内层循环让 LLM 自主决定调几次工具
+        step = 0
         while True:
-            # 调 LLM（带 tools 参数）
-            resp = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=TOOLS,
-            )
+            step += 1
+            if step > MAX_STEPS:
+                print(f"[已达最大步数 {MAX_STEPS}，强制停止。模型可能在反复调用工具，请换个问法或 clear 后重试]")
+                break
+
+            # 调 LLM（带 tools 参数）。网络请求必须设超时，并兜住三类 API 异常
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    tools=TOOLS,
+                    timeout=API_TIMEOUT,
+                )
+            except APITimeoutError:
+                print(f"[LLM 响应超时（{API_TIMEOUT} 秒），本轮终止，请重新提问]")
+                break
+            except APIConnectionError:
+                print("[连不上 API 服务器：请检查网络和 BASE_URL 配置]")
+                break
+            except APIStatusError as e:
+                # 401 key 无效 / 429 限流 / 500 服务端出错等都走这里
+                print(f"[API 返回错误 {e.status_code}: {e.message}]")
+                break
+
             msg = resp.choices[0].message
 
             # 把 LLM 的回复塞回 messages（即使是工具调用也要塞，下一轮 LLM 才能看到自己调过什么）
@@ -271,16 +294,34 @@ def main():
             # 执行 LLM 决定调用的所有工具
             for call in msg.tool_calls:
                 name = call.function.name
-                args = json.loads(call.function.arguments)
+
+                # arguments 是模型生成的 JSON 字符串，可能不合法
+                try:
+                    args = json.loads(call.function.arguments)
+                except json.JSONDecodeError:
+                    print(f"  -> [调用工具] {name}(参数 JSON 解析失败: {call.function.arguments!r})")
+                    # 即使解析失败也必须回一条工具消息：否则有 tool_call 却没有对应结果，
+                    # 消息序列不符合协议，下一次 API 调用会被服务端直接拒绝
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": "错误：arguments 不是合法 JSON，请修正后重新调用该工具",
+                    })
+                    continue
 
                 print(f"  -> [调用工具] {name}({args})")
 
-                # 执行真实函数
+                # 执行真实函数。工具内部已自行兜错，这里再兜一层调用层意外（如参数名不匹配）
                 func = TOOL_FUNCTIONS.get(name)
-                if func:
-                    result = func(**args)
-                else:
+                if not func:
                     result = f"未知工具: {name}"
+                else:
+                    try:
+                        result = func(**args)
+                    except TypeError as e:
+                        result = f"参数不匹配: {e}"
+                    except Exception as e:
+                        result = f"工具执行异常: {e}"
 
                 # 把工具结果塞回 messages（特殊 role="tool"）
                 messages.append({
