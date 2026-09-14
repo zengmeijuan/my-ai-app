@@ -1,6 +1,8 @@
-"""Agent CLI - chat.py 升级版，加入 Function Calling
+"""Agent CLI - chat.py 升级版，加入 Function Calling + Structured Outputs
 
-新增能力：AI 能自主调用工具完成任务
+新增能力：
+1. AI 能自主调用工具完成任务
+2. 最终回答通过 final_answer 工具以结构化 JSON 提交（answer + tools_used），见 2.5 节
 基于 chat.py 的 LLM + 循环 + 记忆 + 工具调用 + 自主决策（5 要素齐全）
 
 工具：
@@ -213,7 +215,42 @@ TOOLS = [
             },
         },
     },
+    # 结构化最终答案：模型提交答案必须调这个工具（而不是输出纯文本），
+    # arguments 由 tool calling 协议保证是符合本 schema 的 JSON。
+    # 注意它不进 TOOL_FUNCTIONS：主循环会特殊拦截，见下方 2.5 节说明
+    {
+        "type": "function",
+        "function": {
+            "name": "final_answer",
+            "description": "提交最终答案。每次回答结束时必须调用本工具，不要用纯文本直接回复用户。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "answer": {"type": "string", "description": "给用户看的最终回答，简洁明了"},
+                    "tools_used": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "本次回答中调用过的工具名，按调用顺序；没调用过则为空数组",
+                    },
+                },
+                "required": ["answer", "tools_used"],
+            },
+        },
+    },
 ]
+
+
+# ============== 2.5 Structured Outputs（用「工具兜底」实现结构化最终回答）==============
+
+# 目标：让最终回答是结构化 JSON（answer + tools_used），而不是自由文本。
+# 标准做法是 create() 时传 response_format={"type": "json_schema", ...}，但实测当前网关
+# （litellm → Anthropic 协议上游 + Thinking 模式）不支持：
+#   - json_schema：网关把它翻译成强制 tool_choice，与 Thinking 模式冲突，直接 400
+#   - json_object：网关接受但静默忽略，模型仍返回纯文本
+# 替代方案：把「提交最终答案」本身做成一个工具（上面的 final_answer）。
+# 工具的 arguments 由 tool calling 协议保证是合法 JSON，所以最终答案天然结构化——
+# 这正是 litellm/Anthropic 在底层实现结构化输出的同款思路（把输出塞进工具调用通道）。
+# 主循环对 final_answer 特殊拦截：展示 answer 后结束本轮，不走 TOOL_FUNCTIONS。
 
 
 # ============== 3. Agent 主循环 ==============
@@ -225,8 +262,9 @@ API_TIMEOUT = 60  # 单次 LLM API 调用的超时秒数，防止网络挂起卡
 # system prompt 提成常量：clear 重置对话时要保留它（里面有工作目录锚点）
 SYSTEM_PROMPT = (
     f"你是一个智能助手。当前工作目录是 {os.getcwd()}，用户说「当前项目」「这个项目」时指该目录下的项目。"
-    "如果用户的问题需要调用工具才能回答，请调用合适的工具；否则直接回答。"
-    "调用工具后请基于工具结果给用户简洁的回复。"
+    "需要查信息或执行操作时，先调用合适的工具（final_answer 除外）。"
+    "最终答案必须通过调用 final_answer 工具提交：answer=给用户看的回答，"
+    "tools_used=本轮按调用顺序用过的工具名列表（没调用过则为空数组）。不要用纯文本直接回复用户。"
 )
 
 
@@ -241,6 +279,7 @@ def main():
     print("  - 文件：'读一下 README.md' 或 '帮我看看 E:/test/a.txt 里有什么'")
     print("  - 目录：'看一下 E:/workspace/studying/my-ai-app 下面有什么'")
     print("  - 搜索：'哪个文件里定义了 get_weather？' 或 '帮我找找哪里用了 dotenv'")
+    print("最终回答通过 final_answer 工具以结构化 JSON 提交（answer + tools_used）")
     print("输入 clear 清空对话（切换话题/项目前用），输入 quit 退出")
     print("=" * 40)
 
@@ -292,12 +331,14 @@ def main():
             # model_dump(exclude_none=True) 把 SDK 对象转 dict，排除空字段
             messages.append(msg.model_dump(exclude_none=True))
 
-            # 如果 LLM 没调工具，说明给了最终答案，退出内循环
+            # 模型无视指令、没调 final_answer 就直接输出纯文本：兜底按原文展示
             if not msg.tool_calls:
                 print(f"AI: {msg.content}")
                 break
 
             # 执行 LLM 决定调用的所有工具
+            # done：模型调了 final_answer（结构化最终答案）则本轮结束
+            done = False
             for call in msg.tool_calls:
                 name = call.function.name
 
@@ -313,6 +354,19 @@ def main():
                         "tool_call_id": call.id,
                         "content": "错误：arguments 不是合法 JSON，请修正后重新调用该工具",
                     })
+                    continue
+
+                # 拦截 final_answer：展示结构化答案，标记本轮结束
+                if name == "final_answer":
+                    print(f"AI: {args.get('answer', '')}")
+                    tools_used = args.get("tools_used") or []
+                    if tools_used:
+                        print(f"    [调用过的工具: {' -> '.join(tools_used)}]")
+                    # 也必须回一条工具消息，保持消息序列合法（和上面解析失败同理）
+                    messages.append({"role": "tool", "tool_call_id": call.id, "content": "ok"})
+                    done = True
+                    # 用 continue 不用 break：万一模型把 final_answer 和其他工具放在
+                    # 同一条消息里，也要保证每个 tool_call 都有对应结果
                     continue
 
                 print(f"  -> [调用工具] {name}({args})")
@@ -335,6 +389,10 @@ def main():
                     "tool_call_id": call.id,
                     "content": result,
                 })
+
+            # 已拿到结构化最终答案，退出内循环
+            if done:
+                break
 
             # 工具结果回传后，回到 while 内循环顶部
             # LLM 看到工具结果，决定下一步：继续调工具 or 给最终答案

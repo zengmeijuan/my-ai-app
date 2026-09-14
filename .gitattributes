@@ -1,0 +1,6 @@
+# Git 对所有文本文件：入库统一 LF，检出也保持 LF
+* text=auto eol=lf
+
+# Windows 批处理脚本必须使用 CRLF（当前仓库暂无此类文件，留作约定）
+*.bat text eol=crlf
+*.cmd text eol=crlf
