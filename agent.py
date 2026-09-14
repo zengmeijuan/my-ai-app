@@ -95,6 +95,10 @@ def grep(pattern: str, path: str = ".") -> str:
         return f"错误：无效的正则表达式: {e}"
 
     matches = []
+    # os.walk(path) 遍历目录树，返回一个生成器，每次迭代会得到一个三元组
+    # root：当前正在遍历的目录路径，字符串
+    # dirs：当前目录下所有子目录名的列表
+    # files：当前目录下所有非目录文件的名称列表
     for root, dirs, files in os.walk(path):
         # 原地过滤 dirs，os.walk 就不会进入被排除的目录
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
@@ -105,7 +109,9 @@ def grep(pattern: str, path: str = ".") -> str:
                     # 前 1024 字节含 \x00 视为二进制文件，跳过（ripgrep 同款判据）
                     if "\x00" in f.read(1024):
                         continue
+                    # 把文件读写位置重置到文件开头
                     f.seek(0)
+                    # 逐行遍历文件对象f，lineno是行号（从1开始），line是这一行的内容
                     for lineno, line in enumerate(f, 1):
                         if re.search(pattern, line):
                             # 单行截断 200 字符，防 minified 文件一行几十 KB
