@@ -11,6 +11,7 @@
 3. read_file(path) - 读取文本文件内容
 4. list_dir(path) - 列出目录内容（一层）
 5. grep(pattern, path) - 在目录下递归搜索文本
+6. search_knowledge(query) - 检索「星辰商城」客服知识库（Agentic RAG，复用 rag.py）
 
 运行：uv run python agent.py
 """
@@ -20,6 +21,10 @@ import re
 
 from dotenv import load_dotenv
 from openai import OpenAI, APITimeoutError, APIConnectionError, APIStatusError
+
+# Agentic RAG：把 rag.py 的知识库检索挂进本 agent 的工具箱。
+# rag 里的 embedding 模型是懒加载单例，import 本身零负担，直到工具真被调用才加载
+import rag
 
 load_dotenv()
 
@@ -131,6 +136,32 @@ def grep(pattern: str, path: str = ".") -> str:
     return f"共 {len(matches)} 处匹配:\n" + "\n".join(matches)
 
 
+# 知识库索引缓存：与 rag.py 的 _model 同款懒加载单例——工具第一次被调用才读盘
+_knowledge_index = None
+
+
+def search_knowledge(query: str) -> str:
+    """在「星辰商城」客服知识库中检索资料（Agentic RAG：rag.py 的固定管线
+    降格为本 agent 的一件工具，查不查、查什么由模型自主决定）"""
+    global _knowledge_index
+    if _knowledge_index is None:
+        if not os.path.exists(rag.INDEX_PATH):
+            return "错误：知识库索引不存在，请让用户先运行: uv run python rag.py build"
+        with open(rag.INDEX_PATH, encoding="utf-8") as f:
+            _knowledge_index = json.load(f)
+        if _knowledge_index["model"] != rag.EMBED_MODEL:
+            _knowledge_index = None  # 不缓存错误索引，避免后续调用反复用它出错
+            return "错误：索引由其他 embedding 模型构建，请让用户重新运行 rag.py build"
+
+    # 核心复用：rag.retrieve 用同一个 embedding 模型把问题向量化，算余弦取 top-3
+    results = rag.retrieve(query, _knowledge_index)
+    blocks = [
+        f"资料[{i}]（来源：{r['source']}，相似度 {r['score']:.4f}）\n{r['text']}"
+        for i, r in enumerate(results, 1)
+    ]
+    return "\n\n".join(blocks)
+
+
 # 工具名 -> 函数的映射（执行时用）
 TOOL_FUNCTIONS = {
     "get_weather": get_weather,
@@ -138,6 +169,7 @@ TOOL_FUNCTIONS = {
     "read_file": read_file,
     "list_dir": list_dir,
     "grep": grep,
+    "search_knowledge": search_knowledge,
 }
 
 
@@ -215,6 +247,20 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_knowledge",
+            "description": "在「星辰商城」客服知识库中检索资料，返回最相关的知识片段及来源。当用户咨询星辰商城的退货、退款、配送、运费、会员、积分、支付、发票、账号、密码等问题时调用。注意：查本项目的代码文件应使用 read_file/grep，不要用本工具。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "检索问题，用完整的自然语言句子，如「退款多久到账」"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
     # 结构化最终答案：模型提交答案必须调这个工具（而不是输出纯文本），
     # arguments 由 tool calling 协议保证是符合本 schema 的 JSON。
     # 注意它不进 TOOL_FUNCTIONS：主循环会特殊拦截，见下方 2.5 节说明
@@ -279,6 +325,7 @@ def main():
     print("  - 文件：'读一下 README.md' 或 '帮我看看 E:/test/a.txt 里有什么'")
     print("  - 目录：'看一下 E:/workspace/studying/my-ai-app 下面有什么'")
     print("  - 搜索：'哪个文件里定义了 get_weather？' 或 '帮我找找哪里用了 dotenv'")
+    print("  - 知识库：'退货的钱多久能退回来？'（Agentic RAG，AI 自主决定查不查知识库）")
     print("最终回答通过 final_answer 工具以结构化 JSON 提交（answer + tools_used）")
     print("输入 clear 清空对话（切换话题/项目前用），输入 quit 退出")
     print("=" * 40)
