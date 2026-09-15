@@ -12,3 +12,6 @@ wheels/
 # Environment variables (contains API keys)
 .env
 .env.local
+
+# RAG index (rebuildable from docs/ via: uv run python rag.py build)
+rag_index.json
