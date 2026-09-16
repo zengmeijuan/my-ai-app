@@ -15,3 +15,9 @@ wheels/
 
 # RAG index (rebuildable from docs/ via: uv run python rag.py build)
 rag_index.json
+
+# Agent runtime state (session memory + long-term memory)
+# session.json: messages 磁盘快照，可能含完整对话历史
+# memory.md: 长期记忆文件，可能含敏感信息（过敏、密码、个人偏好），提交会泄露
+session.json
+memory.md

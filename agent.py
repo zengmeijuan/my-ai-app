@@ -4,6 +4,7 @@
 1. AI 能自主调用工具完成任务
 2. 上下文统计：每轮问答后打印当前上下文规模（条数 + 字符），体感上下文膨胀
 3. 会话记忆：messages 落盘到 session.json，启动时自动恢复，quit 后对话不丢
+4. 长期记忆：remember 工具写 memory.md，启动时全文注入 system prompt，跨项目永久保留
 基于 chat.py 的 LLM + 循环 + 记忆 + 工具调用 + 自主决策（5 要素齐全）
 
 工具：
@@ -13,12 +14,14 @@
 4. list_dir(path) - 列出目录内容（一层）
 5. grep(pattern, path) - 在目录下递归搜索文本
 6. search_knowledge(query) - 检索「星辰商城」客服知识库（Agentic RAG，复用 rag.py）
+7. remember(content) - 写入长期记忆（memory.md，跨会话永久保留）
 
 运行：uv run python agent.py
 """
 import os
 import json
 import re
+from datetime import datetime
 
 from dotenv import load_dotenv
 from openai import OpenAI, APITimeoutError, APIConnectionError, APIStatusError
@@ -163,6 +166,19 @@ def search_knowledge(query: str) -> str:
     return "\n\n".join(blocks)
 
 
+def remember(content: str) -> str:
+    """把一条结论性信息追加进长期记忆文件（带时间戳，跨会话永久保留）。
+
+    长期记忆和 RAG 同构：都是「存下来 → 注入/检索 → 影响回答」。
+    区别只在于「语料」换成了对话结论、「检索」简化为全文注入。
+    条目多了就该向量化，届时直接复用 rag.retrieve（记忆库 = 对自己对话历史做 RAG）。
+    """
+    line = f"- [{datetime.now().strftime('%Y-%m-%d %H:%M')}] {content.strip()}"
+    with open(MEMORY_PATH, "a", encoding="utf-8") as f:
+        f.write(line + "\n")
+    return f"已写入长期记忆（下次会话或 clear 后注入 system prompt）：{content.strip()}"
+
+
 # 工具名 -> 函数的映射（执行时用）
 TOOL_FUNCTIONS = {
     "get_weather": get_weather,
@@ -171,6 +187,7 @@ TOOL_FUNCTIONS = {
     "list_dir": list_dir,
     "grep": grep,
     "search_knowledge": search_knowledge,
+    "remember": remember,
 }
 
 
@@ -262,6 +279,20 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember",
+            "description": "把重要信息写入长期记忆，跨会话永久保留。当用户说「记住……」，或出现明显值得长期保留的信息（用户偏好、重要事实、关键结论）时调用。只记简短的结论性陈述，不要记聊天过程。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "要记住的信息，一条简短的结论性陈述，如「主人对花生过敏」"},
+                },
+                "required": ["content"],
+            },
+        },
+    },
 ]
 
 
@@ -275,11 +306,32 @@ API_TIMEOUT = 60  # 单次 LLM API 调用的超时秒数，防止网络挂起卡
 # 退出后保留，下次启动时自动恢复 —— 体感验证：今天说的过敏信息明天还在。
 SESSION_PATH = "session.json"
 
-# system prompt：工作目录锚点，让模型知道「当前项目」指哪里
-SYSTEM_PROMPT = (
+# 长期记忆：跨会话保留的结论性信息（每行一条，markdown 格式，人类可读）。
+# 启动时由 build_system_prompt() 全文注入 system prompt —— 学习版用全文，
+# 条目多了就升级为 RAG 检索（与 rag.py 同构）
+MEMORY_PATH = "memory.md"
+
+# system prompt 基础部分：clear 重置对话时要保留它（里面有工作目录锚点）
+SYSTEM_PROMPT_BASE = (
     f"你是一个智能助手。当前工作目录是 {os.getcwd()}，用户说「当前项目」「这个项目」时指该目录下的项目。"
     "需要查信息或执行操作时，先调用合适的工具。"
 )
+
+
+def build_system_prompt() -> str:
+    """组装 system prompt：基础指令 + 长期记忆（memory.md 存在时追加注入）。
+
+    启动、clear、恢复会话三个时机都会重建 —— 所以 remember 新写的记忆
+    「下次会话或 clear 后」生效。会话中途生效需在 remember 后刷新
+    messages[0]，学习版从简不做。
+    """
+    prompt = SYSTEM_PROMPT_BASE
+    if os.path.exists(MEMORY_PATH):
+        with open(MEMORY_PATH, encoding="utf-8") as f:
+            memory = f.read().strip()
+        if memory:
+            prompt += "\n\n【长期记忆】以下是过去会话中记住的信息，回答时可参考：\n" + memory
+    return prompt
 
 
 def context_stats(messages: list) -> str:
@@ -305,11 +357,13 @@ def main():
                 messages = json.load(f)
             if not messages or messages[0].get("role") != "system":
                 raise ValueError("session 文件缺少 system 消息")
+            # 刷新 system 消息：既保留工作目录锚点，也注入最新长期记忆
+            messages[0] = {"role": "system", "content": build_system_prompt()}
             print(f"[已恢复上次会话：{len(messages)} 条消息，输入 clear 可重新开始]")
         except (json.JSONDecodeError, OSError, ValueError):
             messages = None  # 文件损坏就当没有，重新开始
     if messages is None:
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages = [{"role": "system", "content": build_system_prompt()}]
 
     print(f"使用模型: {model}")
     print("可以问：")
@@ -320,7 +374,8 @@ def main():
     print("  - 目录：'看一下 E:/workspace/studying/my-ai-app 下面有什么'")
     print("  - 搜索：'哪个文件里定义了 get_weather？' 或 '帮我找找哪里用了 dotenv'")
     print("  - 知识库：'退货的钱多久能退回来？'（Agentic RAG，AI 自主决定查不查知识库）")
-    print("输入 clear 清空对话（同步删 session.json，输入 quit 退出")
+    print("  - 记忆：'记住我喜欢简洁的回答'（写入长期记忆，跨会话生效）")
+    print("输入 clear 清空对话（同步删 session.json，但保留长期记忆 memory.md），输入 quit 退出")
     print("=" * 40)
 
     while True:
@@ -329,12 +384,13 @@ def main():
             print("再见。")
             break
         # 清空对话历史，只保留 system prompt（相当于 Claude Code 的 /clear）。
-        # 落盘的 session.json 也要删，否则下次启动又把旧对话恢复回来 —— 这就是「清空」的彻底性
+        # 落盘的 session.json 也要删，否则下次启动又把旧对话恢复回来 —— 这就是「清空」的彻底性。
+        # 注意：长期记忆 memory.md 故意保留 —— clear 忘的是聊天，不是记住的事实
         if user_input.lower() == "clear":
-            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            messages = [{"role": "system", "content": build_system_prompt()}]
             if os.path.exists(SESSION_PATH):
                 os.remove(SESSION_PATH)
-            print("[已清空对话历史和会话文件，上下文重置]")
+            print("[已清空对话历史和会话文件，上下文重置（长期记忆 memory.md 保留）]")
             continue
         if not user_input:
             continue
@@ -425,8 +481,10 @@ def main():
         # 体感实验：每轮打印上下文规模，观察它如何随工具调用膨胀
         print(f"[上下文] {context_stats(messages)}")
         # 会话记忆落盘：每轮问答后把最新 messages 写入磁盘，quit 重启后可无损恢复
+        # indent=2 是为了人类可读（json.load 不在乎缩进）—— 排查对话恢复问题时
+        # 能直接 cat session.json 看每条消息，也避开 IDE 拼写检查因单行过长而跳过
         with open(SESSION_PATH, "w", encoding="utf-8") as f:
-            json.dump(messages, f, ensure_ascii=False)
+            json.dump(messages, f, ensure_ascii=False, indent=2)
 
 # 直接运行本文件时，__name__是__main__，被import时是模块名。
 # 这个判断保证：只有 python agent.py 直接运行时才调 main()，被其他模块导入时不执行
