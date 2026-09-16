@@ -3,6 +3,7 @@
 新增能力：
 1. AI 能自主调用工具完成任务
 2. 上下文统计：每轮问答后打印当前上下文规模（条数 + 字符），体感上下文膨胀
+3. 会话记忆：messages 落盘到 session.json，启动时自动恢复，quit 后对话不丢
 基于 chat.py 的 LLM + 循环 + 记忆 + 工具调用 + 自主决策（5 要素齐全）
 
 工具：
@@ -270,6 +271,10 @@ TOOLS = [
 MAX_STEPS = 10   # 单次提问最多调 LLM 几轮（每轮 LLM 都可能调工具再思考，都在烧 token）
 API_TIMEOUT = 60  # 单次 LLM API 调用的超时秒数，防止网络挂起卡死整个 agent
 
+# 会话记忆：messages 列表的磁盘快照文件，存整个对话历史（含 user/assistant/tool）。
+# 退出后保留，下次启动时自动恢复 —— 体感验证：今天说的过敏信息明天还在。
+SESSION_PATH = "session.json"
+
 # system prompt：工作目录锚点，让模型知道「当前项目」指哪里
 SYSTEM_PROMPT = (
     f"你是一个智能助手。当前工作目录是 {os.getcwd()}，用户说「当前项目」「这个项目」时指该目录下的项目。"
@@ -291,7 +296,20 @@ def context_stats(messages: list) -> str:
 
 
 def main():
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # 会话记忆启动恢复：上次退出前的对话已落盘在 session.json，自动加载回来继续聊。
+    # 必须校验首条是 system、消息序列协议合法 —— 否则 API 下次调用会被服务端 400 拒绝
+    messages = None
+    if os.path.exists(SESSION_PATH):
+        try:
+            with open(SESSION_PATH, encoding="utf-8") as f:
+                messages = json.load(f)
+            if not messages or messages[0].get("role") != "system":
+                raise ValueError("session 文件缺少 system 消息")
+            print(f"[已恢复上次会话：{len(messages)} 条消息，输入 clear 可重新开始]")
+        except (json.JSONDecodeError, OSError, ValueError):
+            messages = None  # 文件损坏就当没有，重新开始
+    if messages is None:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     print(f"使用模型: {model}")
     print("可以问：")
@@ -302,7 +320,7 @@ def main():
     print("  - 目录：'看一下 E:/workspace/studying/my-ai-app 下面有什么'")
     print("  - 搜索：'哪个文件里定义了 get_weather？' 或 '帮我找找哪里用了 dotenv'")
     print("  - 知识库：'退货的钱多久能退回来？'（Agentic RAG，AI 自主决定查不查知识库）")
-    print("输入 clear 清空对话（切换话题/项目前用），输入 quit 退出")
+    print("输入 clear 清空对话（同步删 session.json，输入 quit 退出")
     print("=" * 40)
 
     while True:
@@ -310,10 +328,13 @@ def main():
         if user_input.lower() in ("quit", "exit", "q"):
             print("再见。")
             break
-        # 清空对话历史，只保留 system prompt（相当于 Claude Code 的 /clear）
+        # 清空对话历史，只保留 system prompt（相当于 Claude Code 的 /clear）。
+        # 落盘的 session.json 也要删，否则下次启动又把旧对话恢复回来 —— 这就是「清空」的彻底性
         if user_input.lower() == "clear":
             messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-            print("[已清空对话历史，上下文重置]")
+            if os.path.exists(SESSION_PATH):
+                os.remove(SESSION_PATH)
+            print("[已清空对话历史和会话文件，上下文重置]")
             continue
         if not user_input:
             continue
@@ -403,6 +424,9 @@ def main():
         # 落到这说明本轮问答结束了（内循环因给出答案/错误/步数上限 break）。
         # 体感实验：每轮打印上下文规模，观察它如何随工具调用膨胀
         print(f"[上下文] {context_stats(messages)}")
+        # 会话记忆落盘：每轮问答后把最新 messages 写入磁盘，quit 重启后可无损恢复
+        with open(SESSION_PATH, "w", encoding="utf-8") as f:
+            json.dump(messages, f, ensure_ascii=False)
 
 # 直接运行本文件时，__name__是__main__，被import时是模块名。
 # 这个判断保证：只有 python agent.py 直接运行时才调 main()，被其他模块导入时不执行
