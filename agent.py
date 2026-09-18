@@ -346,7 +346,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "list_dir",
-            "description": "列出指定目录下的文件和子目录（只列一层，不递归）。当用户想看目录结构、确认路径是否存在、找文件在哪时调用。",
+            "description": "列出指定目录下的文件和子目录（只列一层，不递归）。当用户想看目录结构、确认路径是否存在时调用（找特定文件用 grep）。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -446,19 +446,31 @@ SESSION_PATH = "session.json"
 MEMORY_PATH = "memory.md"
 
 # system prompt 基础部分：clear 重置对话时要保留它（里面有工作目录锚点）
-SYSTEM_PROMPT_BASE = (
-    f"你是一个智能助手。当前工作目录是 {os.getcwd()}，用户说「当前项目」「这个项目」时指该目录下的项目。"
-    "需要查信息或执行操作时，先调用合适的工具。\n\n"
-    "工具选择优先级：\n"
-    "1. 涉及「星辰商城」业务（退货/退款/会员/积分/支付/发票/账号/配送等）→ 优先用 search_knowledge 查知识库\n"
-    "2. 知识库没找到 / 用户要查时效性/外部/公开信息 → 用 web_search 找 URL，再 web_fetch 读正文\n"
-    "3. 涉及当前项目的代码/文件 → 用 read_file / grep / list_dir\n"
-    "4. 计算用 calculate，天气用 get_weather，重要结论用 remember\n"
-    "5. 所有工具都无结果时，如实告知「找不到」，禁止编造\n\n"
-    "引用规范：\n"
-    "- 本地知识库资料标 [资料N]（已自动编号），本地文件标 [文件名]，联网结果标 URL\n"
-    "- 总结性回答必须基于工具结果，不要凭训练知识自由发挥\n"
-)
+SYSTEM_PROMPT_BASE = f"""
+# 角色
+你是主人的 AI 工程师助手，熟悉 Python 和 LLM 应用开发。当前工作目录是 {os.getcwd()}，
+用户说「当前项目」「这个项目」时指该目录下的项目。
+
+# 默认风格
+- 回答简洁，主人喜欢直接给方案，少铺垫
+- 技术问题用代码 + 简短说明，复杂对比用 Markdown 表格
+
+# 工具选择优先级
+1. 涉及「星辰商城」业务（退货/退款/会员/积分/支付/发票/账号/配送等）→ 优先用 search_knowledge 查知识库
+2. 知识库没找到 / 用户要查时效性/外部/公开信息 → 用 web_search 找 URL，再 web_fetch 读正文
+3. 涉及当前项目的代码/文件 → 用 read_file / grep / list_dir
+4. 计算用 calculate，天气用 get_weather，重要结论用 remember
+5. 所有工具都无结果时，如实告知「找不到」，**禁止编造**
+
+# 引用规范
+- 本地知识库资料标 [资料N]（已自动编号），本地文件标 [文件名]，联网结果标 URL
+- 总结性回答必须基于工具结果，不要凭训练知识自由发挥
+
+# 禁止
+- 用「作为一个 AI 助手...」开头
+- 编造不存在的 API/库名/URL
+- 重复调同一个工具（拿到结果后直接用）
+"""
 
 
 def build_system_prompt() -> str:
@@ -512,13 +524,14 @@ def main():
     print("可以问：")
     print("  - 天气：'北京天气怎么样？'")
     print("  - 数学：'(25+5)*2 等于多少？'")
-    print("  - 复合：'北京和上海哪个温度高？高多少？'（AI 会连续调用 2 次工具）")
+    print("  - 复合：'北京和上海哪个温度高？'")
     print("  - 文件：'读一下 README.md' 或 '帮我看看 E:/test/a.txt 里有什么'")
-    print("  - 目录：'看一下 E:/workspace/studying/my-ai-app 下面有什么'")
+    print("  - 目录：'看一下当前项目下面有什么'")
     print("  - 搜索：'哪个文件里定义了 get_weather？' 或 '帮我找找哪里用了 dotenv'")
-    print("  - 知识库：'退货的钱多久能退回来？'（Agentic RAG，AI 自主决定查不查知识库）")
-    print("  - 记忆：'记住我喜欢简洁的回答'（写入长期记忆，跨会话生效）")
-    print("输入 clear 清空对话（同步删 session.json，但保留长期记忆 memory.md），输入 quit 退出")
+    print("  - 知识库：'退货的钱多久能退回来？'")
+    print("  - 联网：'Python 3.13 新特性' 或 '读一下 https://docs.python.org/...'")
+    print("  - 记忆：'记住我喜欢简洁的回答'")
+    print("输入 clear 清空对话，quit 退出（clear 和 quit 都不影响长期记忆 memory.md）")
     print("=" * 40)
 
     while True:
@@ -575,7 +588,7 @@ def main():
 
             # 没调工具 = 最终回答，展示后结束本轮
             if not msg.tool_calls:
-                print(f"AI: {msg.content}")
+                print(f"主人，{msg.content}")
                 break
 
             # 执行 LLM 决定调用的所有工具
@@ -592,7 +605,7 @@ def main():
                     messages.append({
                         "role": "tool",
                         "tool_call_id": call.id,
-                        "content": "错误：arguments 不是合法 JSON，请修正后重新调用该工具",
+                        "content": "错误：arguments 不是合法 JSON，请检查字段名是否与 schema 描述一致后重新调用",
                     })
                     continue
 
