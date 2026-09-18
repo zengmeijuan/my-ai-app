@@ -14,7 +14,9 @@
 4. list_dir(path) - 列出目录内容（一层）
 5. grep(pattern, path) - 在目录下递归搜索文本
 6. search_knowledge(query) - 检索「星辰商城」客服知识库（Agentic RAG，复用 rag.py）
-7. remember(content) - 写入长期记忆（memory.md，跨会话永久保留）
+7. web_search(query) - 联网搜索关键词（Bing 中国版）
+8. web_fetch(url) - 抓取指定 URL 的网页正文
+9. remember(content) - 写入长期记忆（memory.md，跨会话永久保留）
 
 运行：uv run python agent.py
 """
@@ -23,6 +25,8 @@ import json
 import re
 from datetime import datetime
 
+import httpx
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from openai import OpenAI, APITimeoutError, APIConnectionError, APIStatusError
 
@@ -42,7 +46,7 @@ model = os.environ.get("MODEL", "gpt-4o-mini")
 # ============== 1. 工具实现（您写的真实函数）==============
 
 def get_weather(city: str) -> str:
-    """获取指定城市的天气（mock 数据，真实项目应调天气 API）"""
+    """返回指定城市的天气（mock 数据）。"""
     weather_db = {
         "北京": {"temp": 25, "condition": "晴", "humidity": 60},
         "上海": {"temp": 28, "condition": "多云", "humidity": 70},
@@ -54,7 +58,7 @@ def get_weather(city: str) -> str:
 
 
 def calculate(expression: str) -> str:
-    """计算数学表达式"""
+    """返回数学表达式的计算结果。"""
     try:
         # 安全 eval：禁止内置函数和危险操作
         result = eval(expression, {"__builtins__": {}}, {})
@@ -64,7 +68,7 @@ def calculate(expression: str) -> str:
 
 
 def read_file(path: str) -> str:
-    """读取指定路径的文本文件内容"""
+    """返回文本文件内容（utf-8 编码）。"""
     try:
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
@@ -77,7 +81,7 @@ def read_file(path: str) -> str:
 
 
 def list_dir(path: str) -> str:
-    """列出指定目录下的文件和子目录（只列一层，不递归）"""
+    """返回指定目录下的一层文件和子目录列表（不递归）。"""
     try:
         if not os.path.isdir(path):
             return f"错误：目录不存在（或传入的是文件路径）: {path}"
@@ -99,7 +103,7 @@ MAX_MATCHES = 50  # 返回条数上限：工具必须自带边界，防止单次
 
 
 def grep(pattern: str, path: str = ".") -> str:
-    """在目录下递归搜索包含指定文本/正则的行，返回 文件:行号:内容"""
+    """返回目录下匹配正则的行（格式：文件:行号:内容）。"""
     try:
         re.compile(pattern)
     except re.error as e:
@@ -145,8 +149,7 @@ _knowledge_index = None
 
 
 def search_knowledge(query: str) -> str:
-    """在「星辰商城」客服知识库中检索资料（Agentic RAG：rag.py 的固定管线
-    降格为本 agent 的一件工具，查不查、查什么由模型自主决定）"""
+    """返回知识库中与问题最相关的 top-3 资料（带来源文件名+相似度）。"""
     global _knowledge_index
     if _knowledge_index is None:
         if not os.path.exists(rag.INDEX_PATH):
@@ -167,16 +170,117 @@ def search_knowledge(query: str) -> str:
 
 
 def remember(content: str) -> str:
-    """把一条结论性信息追加进长期记忆文件（带时间戳，跨会话永久保留）。
-
-    长期记忆和 RAG 同构：都是「存下来 → 注入/检索 → 影响回答」。
-    区别只在于「语料」换成了对话结论、「检索」简化为全文注入。
-    条目多了就该向量化，届时直接复用 rag.retrieve（记忆库 = 对自己对话历史做 RAG）。
-    """
+    """追加一条结论性信息到长期记忆文件（带时间戳）。"""
     line = f"- [{datetime.now().strftime('%Y-%m-%d %H:%M')}] {content.strip()}"
     with open(MEMORY_PATH, "a", encoding="utf-8") as f:
         f.write(line + "\n")
     return f"已写入长期记忆（下次会话或 clear 后注入 system prompt）：{content.strip()}"
+
+
+# ============== 联网工具：web_search + web_fetch ==============
+# 学习版用 DuckDuckGo HTML 接口（无需 key、零成本），是 agent 加联网能力的最短路径
+# 生产环境会换成 MCP browser server（Stage 5）或付费搜索 API（Stage 8）
+
+# web_search 的边界：返回条数 + 抓取超时，避免单次结果撑爆上下文
+SEARCH_MAX_RESULTS = 5       # 最多返回 5 条结果（多了模型也看不过来）
+SEARCH_TIMEOUT = 15          # 搜索请求超时秒数
+FETCH_TIMEOUT = 20           # 抓取请求超时秒数
+FETCH_MAX_CHARS = 8000       # 抓取内容最大字符数（超长正文截断，防止撑爆上下文）
+
+# 浏览器 UA：默认 httpx UA 会被搜索引擎当成机器人拦截
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
+
+
+def web_search(query: str) -> str:
+    """返回最多 5 条 Bing 搜索结果的标题+摘要+URL。"""
+    try:
+        resp = httpx.get(
+            "https://cn.bing.com/search",
+            params={"q": query},
+            headers={
+                "User-Agent": BROWSER_USER_AGENT,
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            },
+            timeout=SEARCH_TIMEOUT,
+            follow_redirects=True, # 告诉 HTTP 客户端: 遇到 3xx 时,要不要自动跟着跳
+        )
+        resp.raise_for_status() # 检查 HTTP 响应状态码,如果不是 2xx 就抛异常
+    except httpx.TimeoutException:
+        return f"错误：搜索超时（{SEARCH_TIMEOUT} 秒），请检查网络或换个关键词重试"
+    except httpx.HTTPStatusError as e:
+        return f"错误：搜索请求失败 HTTP {e.response.status_code}"
+    except httpx.RequestError as e: # 网络层异常，就算没有resp.raise_for_status()，也会抛出
+        return f"错误：连不上搜索引擎: {e}"
+
+    # Bing 中国版的结果容器：li.b_algo（普通结果）/ li.b_ad（广告结果，过滤）
+    # 标题在 h2 > a，摘要在 .b_caption > p（有时直接 p，要兼容两种）
+
+    # resp.text：完整的 HTML 字符串
+    # html.parser：告诉 BeautifulSoup 用哪个解析器来把字符串变成树
+    # BeautifulSoup:将html变成一棵对象树,每个标签都是一个 Python 对象
+    soup = BeautifulSoup(resp.text, "html.parser")
+    items = soup.select("li.b_algo") # 查找所有 class 为 b_algo 的 li 元素
+    if not items:
+        # 极少见：Bing 偶发返回反爬验证码页，特征是没有 b_algo
+        return f"未找到与 '{query}' 相关的搜索结果（搜索引擎可能返回了验证码页，请稍后重试）"
+
+    blocks = []
+    for i, item in enumerate(items[:SEARCH_MAX_RESULTS], 1):
+        h2 = item.select_one("h2") # 查找第一个
+        a = h2.find("a") if h2 else None
+        if not a:
+            continue
+        title = a.get_text(strip=True) # 返回标签内部的所有纯文本（剥掉 HTML 标签）
+        href = a.get("href", "").strip()
+        # 摘要：优先 .b_caption > p，兼容直接的 p 标签
+        cap = item.select_one(".b_caption")
+        snippet_tag = (cap.select_one("p") if cap else None) or item.select_one("p")
+        snippet = snippet_tag.get_text(strip=True) if snippet_tag else ""
+        blocks.append(f"[{i}] {title}\n    URL: {href}\n    摘要: {snippet}")
+
+    if not blocks:
+        return f"未找到与 '{query}' 相关的搜索结果"
+
+    return f"关于 '{query}' 的搜索结果（共 {len(blocks)} 条，来源 cn.bing.com）:\n\n" + "\n\n".join(blocks)
+
+
+def web_fetch(url: str) -> str:
+    """抓取 URL 网页正文，返回清理后的纯文本（去 script/style/nav 等噪音）。"""
+    try:
+        resp = httpx.get(
+            url,
+            headers={"User-Agent": BROWSER_USER_AGENT},
+            timeout=FETCH_TIMEOUT,
+            follow_redirects=True,
+        )
+        resp.raise_for_status()
+    except httpx.TimeoutException:
+        return f"错误：抓取超时（{FETCH_TIMEOUT} 秒）: {url}"
+    except httpx.HTTPStatusError as e:
+        return f"错误：抓取失败 HTTP {e.response.status_code}: {url}"
+    except httpx.RequestError as e:
+        return f"错误：连不上目标网站: {e} ({url})"
+
+    # 用 BeautifulSoup 解析 HTML，移除 script/style 等噪音标签，再提取文本
+    soup = BeautifulSoup(resp.text, "html.parser")
+    for tag in soup(["script", "style", "noscript", "iframe", "header", "footer", "nav"]):
+        tag.decompose() # 删除对应的标签
+    text = soup.get_text(separator="\n", strip=True) # 标签之间插入换行符
+    # 把连续空行压缩成一个（脏 HTML 里常见）
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+
+    if not text:
+        return f"错误：页面解析后为空（可能是 SPA 渲染，需要浏览器工具）: {url}"
+
+    truncated = len(text) > FETCH_MAX_CHARS
+    if truncated:
+        text = text[:FETCH_MAX_CHARS] + f"\n\n... [内容过长，已截断到 {FETCH_MAX_CHARS} 字符]"
+
+    return f"URL: {url}\n\n{text}"
 
 
 # 工具名 -> 函数的映射（执行时用）
@@ -187,6 +291,8 @@ TOOL_FUNCTIONS = {
     "list_dir": list_dir,
     "grep": grep,
     "search_knowledge": search_knowledge,
+    "web_search": web_search,
+    "web_fetch": web_fetch,
     "remember": remember,
 }
 
@@ -293,6 +399,34 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "用 Bing 中国版联网搜索关键词，返回最多 5 条结果的标题、摘要和 URL。调用时机：search_knowledge 知识库中找不到相关信息时（兜底）、需要时效性/外部/公开信息时（如新闻、最新技术、权威来源）。不要用此工具查本地项目代码（用 read_file/grep）或星辰商城业务问题（用 search_knowledge）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "搜索关键词或完整问题，如「Python 3.13 新特性」"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_fetch",
+            "description": "抓取指定 URL 的网页正文（去除脚本/样式/导航等噪音），返回清理后的文本。调用时机：拿到 web_search 返回的 URL 后想读详情时，或用户直接给了一个 URL 想看内容时。仅用于公开网页，不要用于登录态、敏感账号或绕过平台限制。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "要抓取的完整 URL，如 https://docs.python.org/3.13/whatsnew/"},
+                },
+                "required": ["url"],
+            },
+        },
+    },
 ]
 
 
@@ -314,7 +448,16 @@ MEMORY_PATH = "memory.md"
 # system prompt 基础部分：clear 重置对话时要保留它（里面有工作目录锚点）
 SYSTEM_PROMPT_BASE = (
     f"你是一个智能助手。当前工作目录是 {os.getcwd()}，用户说「当前项目」「这个项目」时指该目录下的项目。"
-    "需要查信息或执行操作时，先调用合适的工具。"
+    "需要查信息或执行操作时，先调用合适的工具。\n\n"
+    "工具选择优先级：\n"
+    "1. 涉及「星辰商城」业务（退货/退款/会员/积分/支付/发票/账号/配送等）→ 优先用 search_knowledge 查知识库\n"
+    "2. 知识库没找到 / 用户要查时效性/外部/公开信息 → 用 web_search 找 URL，再 web_fetch 读正文\n"
+    "3. 涉及当前项目的代码/文件 → 用 read_file / grep / list_dir\n"
+    "4. 计算用 calculate，天气用 get_weather，重要结论用 remember\n"
+    "5. 所有工具都无结果时，如实告知「找不到」，禁止编造\n\n"
+    "引用规范：\n"
+    "- 本地知识库资料标 [资料N]（已自动编号），本地文件标 [文件名]，联网结果标 URL\n"
+    "- 总结性回答必须基于工具结果，不要凭训练知识自由发挥\n"
 )
 
 
