@@ -437,11 +437,12 @@ TOOLS = [
 MAX_STEPS = 10   # 单次提问最多调 LLM 几轮（每轮 LLM 都可能调工具再思考，都在烧 token）
 API_TIMEOUT = 60  # 单次 LLM API 调用的超时秒数，防止网络挂起卡死整个 agent
 
-# 上下文压缩阈值：上下文窗口约 128K tokens，字符/token ≈0.6，稳态目标 16K 字符留足余量。
-# 超过 24K 触发压缩 → 保留 system + 最近 2 条 + 中间全部压成一条摘要 system 消息
-CONTEXT_WATCH = 16_000
-CONTEXT_COMPACT = 24_000
-COMPACT_KEEP_RECENT = 2  # 保留尾部多少条不压，确保模型对最近上下文仍有完整记忆
+# 上下文压缩阈值：deepseek-v4-flash 实际窗口待确认（官方 V3 是 64K/128K，第三方称 V4.1 Flash 1M），
+# 中文为主时 1 token ≈ 1~1.5 字符，所以 128K tokens ≈ 131K~197K 字符。
+# 当前阈值按 128K 窗口的 ~40%/55% 设（保守偏低），跑通后按实际窗口调整。
+CONTEXT_WATCH = 80_000
+CONTEXT_COMPACT = 110_000
+COMPACT_KEEP_USER_ROUNDS = 1  # 保留尾部多少个完整 user 轮不压，确保协议合法（assistant+tool 序列完整）
 COMPACT_MAX_TOKENS = 600  # 压缩调用本身的回答上限，足够生成 200~400 字摘要
 
 # 会话记忆：messages 列表的磁盘快照文件，存整个对话历史（含 user/assistant/tool）。
@@ -517,25 +518,43 @@ COMPACT_PROMPT = """请把以下多轮对话压缩成一段 200~400 字的简洁
 5. 不要添加对话中没有的内容"""
 
 
+def find_user_round_start(messages: list, keep_rounds: int) -> int:
+    """从尾部向前回溯，跳过 system(idx 0)，找到第 keep_rounds 个 user 消息的索引。
+
+    一轮对话定义为「从 user 消息开始，到下一个 user 消息之前」，这样切能保证 tail
+    始终是完整的 user→assistant→tool 序列，OpenAI 协议合法（tool 不会孤儿化）。
+
+    返回 cut 索引：messages[cut:] 是要保留的最近 keep_rounds 个完整轮。
+    若找不到足够 user（少于 keep_rounds 个），返回 -1。
+    """
+    user_count = 0
+    for i in range(len(messages) - 1, 0, -1):  # 跳过 system（索引 0）
+        if messages[i].get("role") == "user":
+            user_count += 1
+            if user_count == keep_rounds:
+                return i
+    return -1
+
+
 def compact_messages(messages: list) -> bool:
-    """超阈值时压缩 messages：保留 system 和最近 K 条，中间压成一条摘要 system 消息。
+    """超阈值时压缩 messages：保留 system + 最近 N 个完整 user 轮，中间压成一条摘要。
 
     返回 True 表示发生了压缩（无论成功与否），False 表示跳过。
-    幂等：连续两次压缩只触发一次（中间消息不够时不压）。
     失败兜底：压缩调用本身超时/出错时不动 messages，留给下次机会。
     """
     if context_stats_size(messages) <= CONTEXT_COMPACT:
         return False
 
-    # 边界：保证除 1条系统消息 + 最近 K 条保留消息外，有消息可压
-    if len(messages) <= 1 + COMPACT_KEEP_RECENT:
+    # 从尾部向前找第 N 个 user 消息的位置，作为 tail 起点
+    cut = find_user_round_start(messages, COMPACT_KEEP_USER_ROUNDS)
+    if cut <= 1:  # cut=1 表示 user 紧跟 system，没东西可压；cut=-1 表示找不到足够 user
         return False
 
-    head = messages[:1]                       # system 消息保留
-    tail = messages[-COMPACT_KEEP_RECENT:]    # 最近 K 条保留
-    middle = messages[1:-COMPACT_KEEP_RECENT]  # 中间要压缩的部分
+    head = messages[:1]                          # system 消息保留
+    tail = messages[cut:]                        # 最近 N 个完整轮
+    middle = messages[1:cut]                     # 中间要压缩的部分
 
-    # 把中间序列转成一段对话文本喂给压缩模型，role: 标记 + 内容/工具摘要
+    # 把中间序列转成一段对话文本喂给压缩模型，role 标记 + 内容/工具摘要
     parts = []
     for m in middle:
         role = m.get("role", "?")
@@ -572,7 +591,7 @@ def compact_messages(messages: list) -> bool:
         return False
 
     before = context_stats_size(messages)
-    # 用 list 重建 messages，避免原地修改引起的引用混乱
+    # 用 clear + extend + append 原地重组 messages，外部引用不变
     messages.clear()
     messages.extend(head)
     messages.append({
@@ -581,7 +600,7 @@ def compact_messages(messages: list) -> bool:
     })
     messages.extend(tail)
     after = context_stats_size(messages)
-    print(f"[上下文] 已压缩 {len(middle)} 条中间消息 → 1 条摘要，{before} → {after} 字符")
+    print(f"[上下文] 已压缩 {len(middle)} 条中间消息→ 1 条摘要，{before} → {after} 字符")
     return True
 
 
