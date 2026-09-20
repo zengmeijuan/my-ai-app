@@ -437,6 +437,13 @@ TOOLS = [
 MAX_STEPS = 10   # 单次提问最多调 LLM 几轮（每轮 LLM 都可能调工具再思考，都在烧 token）
 API_TIMEOUT = 60  # 单次 LLM API 调用的超时秒数，防止网络挂起卡死整个 agent
 
+# 上下文压缩阈值：上下文窗口约 128K tokens，字符/token ≈0.6，稳态目标 16K 字符留足余量。
+# 超过 24K 触发压缩 → 保留 system + 最近 2 条 + 中间全部压成一条摘要 system 消息
+CONTEXT_WATCH = 16_000
+CONTEXT_COMPACT = 24_000
+COMPACT_KEEP_RECENT = 2  # 保留尾部多少条不压，确保模型对最近上下文仍有完整记忆
+COMPACT_MAX_TOKENS = 600  # 压缩调用本身的回答上限，足够生成 200~400 字摘要
+
 # 会话记忆：messages 列表的磁盘快照文件，存整个对话历史（含 user/assistant/tool）。
 # 退出后保留，下次启动时自动恢复 —— 体感验证：今天说的过敏信息明天还在。
 SESSION_PATH = "session.json"
@@ -490,17 +497,93 @@ def build_system_prompt() -> str:
     return prompt
 
 
-def context_stats(messages: list) -> str:
-    """统计上下文规模：消息条数 + 字符总数（体感实验：亲眼观察上下文膨胀）。
-
-    字符不只数 content——tool_calls 的 arguments 也是真金白银的上下文。
-    """
+def context_stats_size(messages: list) -> int:
+    """统计上下文字符总数：content + tool_calls.arguments。"""
     total = 0
     for m in messages:
         total += len(m.get("content") or "")
         for call in (m.get("tool_calls") or []):
             total += len(call.get("function", {}).get("arguments") or "")
-    return f"{len(messages)} 条消息 · 约 {total} 字符"
+    return total
+
+
+# 压缩摘要的提示词：事实优先，丢弃代码匹配等冗长细节
+COMPACT_PROMPT = """请把以下多轮对话压缩成一段 200~400 字的简洁摘要。
+要求：
+1. 保留关键事实：用户偏好、提问意图、得出的结论、工具调用结果的关键信息
+2. 丢弃冗长细节：grep 匹配行、原始文件内容、网页正文只保留结论
+3. 不要复述工具的原始输出，用一句结论概括
+4. 用中文，按时间顺序，列出关键事件
+5. 不要添加对话中没有的内容"""
+
+
+def compact_messages(messages: list) -> bool:
+    """超阈值时压缩 messages：保留 system 和最近 K 条，中间压成一条摘要 system 消息。
+
+    返回 True 表示发生了压缩（无论成功与否），False 表示跳过。
+    幂等：连续两次压缩只触发一次（中间消息不够时不压）。
+    失败兜底：压缩调用本身超时/出错时不动 messages，留给下次机会。
+    """
+    if context_stats_size(messages) <= CONTEXT_COMPACT:
+        return False
+
+    # 边界：保证除 1条系统消息 + 最近 K 条保留消息外，有消息可压
+    if len(messages) <= 1 + COMPACT_KEEP_RECENT:
+        return False
+
+    head = messages[:1]                       # system 消息保留
+    tail = messages[-COMPACT_KEEP_RECENT:]    # 最近 K 条保留
+    middle = messages[1:-COMPACT_KEEP_RECENT]  # 中间要压缩的部分
+
+    # 把中间序列转成一段对话文本喂给压缩模型，role: 标记 + 内容/工具摘要
+    parts = []
+    for m in middle:
+        role = m.get("role", "?")
+        content = m.get("content") or ""
+        if role == "tool":
+            # 工具结果只取前 100 字符作为索引，原始长结果已在记忆中
+            parts.append(f"[工具结果] {content[:100]}{'...' if len(content) > 100 else ''}")
+        elif role == "assistant" and m.get("tool_calls"):
+            names = [tc["function"]["name"] for tc in m["tool_calls"]]
+            parts.append(f"[助手调用工具] {', '.join(names)}")
+        else:
+            parts.append(f"[{role}] {content}")
+    dialogue = "\n".join(parts)
+
+    # 单独开一个轻量压缩请求：不开 tools、低 temperature、限 max_tokens 控长度
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": COMPACT_PROMPT},
+                {"role": "user", "content": dialogue},
+            ],
+            temperature=0.2,
+            max_tokens=COMPACT_MAX_TOKENS,
+            timeout=API_TIMEOUT,
+        )
+    except (APITimeoutError, APIConnectionError, APIStatusError) as e:
+        print(f"[上下文压缩失败：{type(e).__name__}，本轮不压缩留待下次]")
+        return False
+
+    summary = resp.choices[0].message.content or ""
+    if not summary.strip():
+        print("[上下文压缩失败：模型返回空摘要，本轮不压缩]")
+        return False
+
+    before = context_stats_size(messages)
+    # 用 list 重建 messages，避免原地修改引起的引用混乱
+    messages.clear()
+    messages.extend(head)
+    messages.append({
+        "role": "system",
+        "content": f"【对话历史摘要】以下是之前对话的压缩摘要，仅供参考；用户当前问题在摘要之后：\n{summary}",
+    })
+    messages.extend(tail)
+    after = context_stats_size(messages)
+    print(f"[上下文] 已压缩 {len(middle)} 条中间消息 → 1 条摘要，{before} → {after} 字符")
+    return True
+
 
 
 def main():
@@ -551,6 +634,14 @@ def main():
             continue
         if not user_input:
             continue
+
+        # 本轮问答开头先看一眼上下文：超过阈值就压缩，并立刻同步落盘。保证本轮回答不被压缩
+        if compact_messages(messages):
+            with open(SESSION_PATH, "w", encoding="utf-8") as f:
+                json.dump(messages, f, ensure_ascii=False, indent=2)
+        # 没压缩但接近阈值时也提醒一下，方便观察余量
+        elif context_stats_size(messages) >= CONTEXT_WATCH:
+            print(f"[上下文] 已达观察阈值 {CONTEXT_WATCH} 字符，下次提问前可能触发压缩")
 
         messages.append({"role": "user", "content": user_input})
 
@@ -676,7 +767,7 @@ def main():
 
         # 落到这说明本轮问答结束了（内循环因给出答案/错误/步数上限 break）。
         # 体感实验：每轮打印上下文规模，观察它如何随工具调用膨胀
-        print(f"[上下文] {context_stats(messages)}")
+        print(f"[上下文] {len(messages)} 条消息 · 约 {context_stats_size(messages)} 字符")
         # 会话记忆落盘：每轮问答后把最新 messages 写入磁盘，quit 重启后可无损恢复
         # indent=2 是为了人类可读（json.load 不在乎缩进）—— 排查对话恢复问题时
         # 能直接 cat session.json 看每条消息，也避开 IDE 拼写检查因单行过长而跳过
