@@ -5,6 +5,7 @@
 2. 上下文统计：每轮问答后打印当前上下文规模（条数 + 字符），体感上下文膨胀
 3. 会话记忆：messages 落盘到 session.json，启动时自动恢复，quit 后对话不丢
 4. 长期记忆：remember 工具写 memory.md，启动时全文注入 system prompt，跨项目永久保留
+5. 流式输出：stream=True 逐字打印回答，工具调用分片按 index 重组后再执行
 基于 chat.py 的 LLM + 循环 + 记忆 + 工具调用 + 自主决策（5 要素齐全）
 
 工具：
@@ -561,50 +562,90 @@ def main():
                 print(f"[已达最大步数 {MAX_STEPS}，强制停止。模型可能在反复调用工具，请换个问法或 clear 后重试]")
                 break
 
-            # 调 LLM（带 tools 参数）。网络请求必须设超时，并兜住三类 API 异常
+            # 流式调 LLM（stream=True）。create() 只建立连接就返回，之后逐块收到 chunk。
+            # 超时/断连/HTTP 错误既可能在建连时抛出，也可能在消费 chunk 的过程中抛出，
+            # 所以 create 和 for 循环要放在同一个 try 里兜住
+            content_parts = []   # 文本片段累计器，流结束后拼成完整回复
+            tool_calls_acc = {}  # index -> {"id","name","arguments"}，工具调用分片组装器
             try:
-                resp = client.chat.completions.create(
+                stream = client.chat.completions.create(
                     model=model,
                     messages=messages,
                     tools=TOOLS,
                     timeout=API_TIMEOUT,
+                    stream=True,
                 )
+                for chunk in stream:
+                    if not chunk.choices:
+                        continue  # 部分服务端在最后发一个只带用量统计、无 choices 的收尾块
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        # flush=True 立即刷新 stdout 缓冲区，否则逐字打印会攒成一大段才显示
+                        print(delta.content, end="", flush=True)
+                        content_parts.append(delta.content)
+                    # 工具调用分片到达：首个分片带 id 和完整 name，arguments 被切成
+                    # 多个碎片散在后续分片里，必须按 index 拼回完整 JSON
+                    for tc in delta.tool_calls or []:
+                        slot = tool_calls_acc.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
+                        if tc.id:
+                            slot["id"] += tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                slot["name"] += tc.function.name
+                            if tc.function.arguments:
+                                slot["arguments"] += tc.function.arguments
             except APITimeoutError:
-                print(f"[LLM 响应超时（{API_TIMEOUT} 秒），本轮终止，请重新提问]")
+                # 消息开头的 \n 顺便截断流式中已打印一半的行
+                print(f"\n[LLM 响应超时（{API_TIMEOUT} 秒），本轮终止，请重新提问]")
                 break
             except APIConnectionError:
-                print("[连不上 API 服务器：请检查网络和 BASE_URL 配置]")
+                print("\n[连不上 API 服务器：请检查网络和 BASE_URL 配置]")
                 break
             except APIStatusError as e:
                 # 401 key 无效 / 429 限流 / 500 服务端出错等都走这里
-                print(f"[API 返回错误 {e.status_code}: {e.message}]")
+                print(f"\n[API 返回错误 {e.status_code}: {e.message}]")
+                break
+            if content_parts:
+                print()  # 流式打印不带换行，收尾补一个，避免下一条输出接在同一行
+
+            final_content = "".join(content_parts)
+
+            # 没调工具 = 最终回答，结束本轮。流式没有现成的 message 对象，
+            # assistant 消息要手工组装塞回 messages，会话落盘才完整
+            if not tool_calls_acc:
+                messages.append({"role": "assistant", "content": final_content})
                 break
 
-            msg = resp.choices[0].message
-
-            # 把 LLM 的回复塞回 messages（即使是工具调用也要塞，下一轮 LLM 才能看到自己调过什么）
-            # model_dump(exclude_none=True) 把 SDK 对象转 dict，排除空字段
-            messages.append(msg.model_dump(exclude_none=True))
-
-            # 没调工具 = 最终回答，展示后结束本轮
-            if not msg.tool_calls:
-                print(f"主人，{msg.content}")
-                break
+            # 有工具调用：按 OpenAI 协议拼出 id/type/function 三件套再塞回 messages，
+            # 下一轮 LLM 才能看到自己调过什么工具、结果是什么
+            assistant_tool_calls = [
+                {
+                    "id": slot["id"],
+                    "type": "function",
+                    "function": {"name": slot["name"], "arguments": slot["arguments"]},
+                }
+                for slot in tool_calls_acc.values()
+            ]
+            messages.append({
+                "role": "assistant",
+                "content": final_content or None,
+                "tool_calls": assistant_tool_calls,
+            })
 
             # 执行 LLM 决定调用的所有工具
-            for call in msg.tool_calls:
-                name = call.function.name
+            for call in assistant_tool_calls:
+                name = call["function"]["name"]
 
                 # arguments 是模型生成的 JSON 字符串，可能不合法
                 try:
-                    args = json.loads(call.function.arguments)
+                    args = json.loads(call["function"]["arguments"])
                 except json.JSONDecodeError:
-                    print(f"  -> [调用工具] {name}(参数 JSON 解析失败: {call.function.arguments!r})")
+                    print(f"  -> [调用工具] {name}(参数 JSON 解析失败: {call['function']['arguments']!r})")
                     # 即使解析失败也必须回一条工具消息：否则有 tool_call 却没有对应结果，
                     # 消息序列不符合协议，下一次 API 调用会被服务端直接拒绝
                     messages.append({
                         "role": "tool",
-                        "tool_call_id": call.id,
+                        "tool_call_id": call["id"],
                         "content": "错误：arguments 不是合法 JSON，请检查字段名是否与 schema 描述一致后重新调用",
                     })
                     continue
@@ -626,7 +667,7 @@ def main():
                 # 把工具结果塞回 messages（特殊 role="tool"）
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": call.id,
+                    "tool_call_id": call["id"],
                     "content": result,
                 })
 
