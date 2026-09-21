@@ -72,20 +72,16 @@ def calculate(expression: str) -> str:
 def read_file(path: str) -> str:
     """返回文本文件内容（utf-8 编码）。
 
-    边界：超过 10MB 硬上限直接报错；超过 1MB 软上限只读前 1MB 并提示。
+    边界：超过 10MB 字节硬上限直接报错；超过 3万字符软上限只读前 N 字符并提示。
     """
     try:
         size = os.path.getsize(path)
         if size > MAX_READ_HARD_LIMIT:
-            return f"错误：文件过大（{size} 字节 > 硬上限 {MAX_READ_HARD_LIMIT}），不读取。请用 grep 定位或换更小范围的文件"
+            return f"错误：文件过大（{size} 字节 > 硬上限 {MAX_READ_HARD_LIMIT} 字节），不读取。请用 grep 定位或换更小范围的文件"
         with open(path, "r", encoding="utf-8") as f:
-            content = f.read(MAX_READ_BYTES)
-        if size > MAX_READ_BYTES:
-            return (
-                f"⚠️ 文件共 {size} 字节，仅返回前 {MAX_READ_BYTES} 字节。"
-                f"如需查看后续内容，请用更精确的 grep 或其他工具：\n\n{content}\n\n"
-                f"... [已截断]"
-            )
+            content = f.read(MAX_READ_CHARS + 1)   # 多读 1 个字符用来判断是否截断
+        if len(content) > MAX_READ_CHARS:
+            content = content[:MAX_READ_CHARS] + f"\n\n... [已截断到 {MAX_READ_CHARS} 字符]"
         return content
     except FileNotFoundError:
         return f"错误：文件不存在: {path}"
@@ -113,11 +109,11 @@ def list_dir(path: str) -> str:
 
 
 # grep 时跳过这些目录：依赖/版本库里的匹配会淹没结果并撑爆上下文
-SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".idea", ".vscode"}
+SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".idea", ".vscode", "session.json", "rag_index.json", "memory.md", "uv.lock" }
 MAX_MATCHES = 50  # 返回条数上限：工具必须自带边界，防止单次结果撑爆上下文
-MAX_READ_BYTES = 1_048_576  # read_file 软上限：超过只读前 1MB 并提示，不直接拒绝
-MAX_READ_HARD_LIMIT = 10_485_760  # read_file 硬上限：超过直接报错不读（10MB），防止读巨型文件 IO 卡顿
-MAX_GREP_FILE_BYTES = 1_048_576  # grep 单文件大小上限（1MB），超过跳过该文件，防止遍历巨型文件挂死
+MAX_READ_CHARS = 30_000  # read_file 软上限：超过只读前 N 字符并提示，与上下文统计同单位（字符）
+MAX_READ_HARD_LIMIT = 10_485_760  # read_file 硬上限：超过直接报错不读（10MB 字节），防止读巨型文件 IO 卡顿
+MAX_GREP_FILE_BYTES = 1_048_576  # grep 单文件大小上限（1MB 字节），超过跳过该文件，防止遍历巨型文件挂死
 
 
 def grep(pattern: str, path: str = ".") -> str:
