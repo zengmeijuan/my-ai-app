@@ -28,6 +28,7 @@ from datetime import datetime
 
 import httpx
 from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from openai import OpenAI, APITimeoutError, APIConnectionError, APIStatusError
 
@@ -69,10 +70,23 @@ def calculate(expression: str) -> str:
 
 
 def read_file(path: str) -> str:
-    """返回文本文件内容（utf-8 编码）。"""
+    """返回文本文件内容（utf-8 编码）。
+
+    边界：超过 10MB 硬上限直接报错；超过 1MB 软上限只读前 1MB 并提示。
+    """
     try:
+        size = os.path.getsize(path)
+        if size > MAX_READ_HARD_LIMIT:
+            return f"错误：文件过大（{size} 字节 > 硬上限 {MAX_READ_HARD_LIMIT}），不读取。请用 grep 定位或换更小范围的文件"
         with open(path, "r", encoding="utf-8") as f:
-            return f.read()
+            content = f.read(MAX_READ_BYTES)
+        if size > MAX_READ_BYTES:
+            return (
+                f"⚠️ 文件共 {size} 字节，仅返回前 {MAX_READ_BYTES} 字节。"
+                f"如需查看后续内容，请用更精确的 grep 或其他工具：\n\n{content}\n\n"
+                f"... [已截断]"
+            )
+        return content
     except FileNotFoundError:
         return f"错误：文件不存在: {path}"
     except UnicodeDecodeError:
@@ -101,6 +115,9 @@ def list_dir(path: str) -> str:
 # grep 时跳过这些目录：依赖/版本库里的匹配会淹没结果并撑爆上下文
 SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".idea", ".vscode"}
 MAX_MATCHES = 50  # 返回条数上限：工具必须自带边界，防止单次结果撑爆上下文
+MAX_READ_BYTES = 1_048_576  # read_file 软上限：超过只读前 1MB 并提示，不直接拒绝
+MAX_READ_HARD_LIMIT = 10_485_760  # read_file 硬上限：超过直接报错不读（10MB），防止读巨型文件 IO 卡顿
+MAX_GREP_FILE_BYTES = 1_048_576  # grep 单文件大小上限（1MB），超过跳过该文件，防止遍历巨型文件挂死
 
 
 def grep(pattern: str, path: str = ".") -> str:
@@ -111,6 +128,7 @@ def grep(pattern: str, path: str = ".") -> str:
         return f"错误：无效的正则表达式: {e}"
 
     matches = []
+    skipped_large = []  # 被跳过的大文件列表，"未找到"时告知用户可能漏匹配
     # os.walk(path) 遍历目录树，返回一个生成器，每次迭代会得到一个三元组
     # root：当前正在遍历的目录路径，字符串
     # dirs：当前目录下所有子目录名的列表
@@ -121,6 +139,10 @@ def grep(pattern: str, path: str = ".") -> str:
         for fname in files:
             fpath = os.path.join(root, fname)
             try:
+                # 单文件过大直接跳过，防止遍历巨型文件挂死
+                if os.path.getsize(fpath) > MAX_GREP_FILE_BYTES:
+                    skipped_large.append(fpath)
+                    continue
                 with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
                     # 前 1024 字节含 \x00 视为二进制文件，跳过（ripgrep 同款判据）
                     if "\x00" in f.read(1024):
@@ -141,7 +163,10 @@ def grep(pattern: str, path: str = ".") -> str:
                 continue  # 无权限或打不开的文件直接跳过
 
     if not matches:
-        return f"未找到匹配 '{pattern}'（目录: {path}）"
+        msg = f"未找到匹配 '{pattern}'（目录: {path}）"
+        if skipped_large:
+            msg += f"\n提示：{len(skipped_large)} 个大文件（>1MB）被跳过，可能包含匹配内容。如确需搜索，可先用 list_dir 定位，再 read_file 直接读这些文件。"
+        return msg
     return f"共 {len(matches)} 处匹配:\n" + "\n".join(matches)
 
 
@@ -536,6 +561,30 @@ def find_user_round_start(messages: list, keep_rounds: int) -> int:
     return -1
 
 
+def run_one_tool(call: dict) -> tuple:
+    """执行单个工具调用，返回 (call, name, args, result) 四元组。
+
+    所有异常都在这里兜住，不让一个工具的失败影响其他并行执行的任务。
+    TOOL_FUNCTIONS 在并行路径中只读访问，多线程安全。
+    """
+    name = call["function"]["name"]
+    args_raw = call["function"]["arguments"]
+    try:
+        args = json.loads(args_raw)
+    except json.JSONDecodeError:
+        return call, name, None, "错误：arguments 不是合法 JSON，请检查字段名是否与 schema 描述一致后重新调用"
+    func = TOOL_FUNCTIONS.get(name)
+    if not func:
+        return call, name, args, f"未知工具: {name}"
+    try:
+        result = func(**args)
+    except TypeError as e:
+        result = f"参数不匹配: {e}"
+    except Exception as e:
+        result = f"工具执行异常: {e}"
+    return call, name, args, result
+
+
 def compact_messages(messages: list) -> bool:
     """超阈值时压缩 messages：保留 system + 最近 N 个完整 user 轮，中间压成一条摘要。
 
@@ -742,39 +791,18 @@ def main():
                 "tool_calls": assistant_tool_calls,
             })
 
-            # 执行 LLM 决定调用的所有工具
-            for call in assistant_tool_calls:
-                name = call["function"]["name"]
+            # 并行执行多个工具调用：独立请求并发跑，节约串行等待时间。
+            # run_one_tool 在模块级定义，保证协议合法（messages 按 LLM 调用顺序追加）
+            with ThreadPoolExecutor(max_workers=len(assistant_tool_calls)) as pool:
+                # map 保证按入参顺序返回，但内部并发执行
+                results = list(pool.map(run_one_tool, assistant_tool_calls))
 
-                # arguments 是模型生成的 JSON 字符串，可能不合法
-                try:
-                    args = json.loads(call["function"]["arguments"])
-                except json.JSONDecodeError:
-                    print(f"  -> [调用工具] {name}(参数 JSON 解析失败: {call['function']['arguments']!r})")
-                    # 即使解析失败也必须回一条工具消息：否则有 tool_call 却没有对应结果，
-                    # 消息序列不符合协议，下一次 API 调用会被服务端直接拒绝
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": call["id"],
-                        "content": "错误：arguments 不是合法 JSON，请检查字段名是否与 schema 描述一致后重新调用",
-                    })
-                    continue
-
-                print(f"  -> [调用工具] {name}({args})")
-
-                # 执行真实函数。工具内部已自行兜错，这里再兜一层调用层意外（如参数名不匹配）
-                func = TOOL_FUNCTIONS.get(name)
-                if not func:
-                    result = f"未知工具: {name}"
-                else:
-                    try:
-                        result = func(**args)
-                    except TypeError as e:
-                        result = f"参数不匹配: {e}"
-                    except Exception as e:
-                        result = f"工具执行异常: {e}"
-
-                # 把工具结果塞回 messages（特殊 role="tool"）
+            for call, name, args, result in results:
+                # args 是 None 说明 JSON 解析失败，打印原始字符串
+                args_repr = args if args is not None else f"(JSON 解析失败: {call['function']['arguments']!r})"
+                print(f"  -> [调用工具] {name}({args_repr})")
+                # 即使失败也必须回一条工具消息：否则有 tool_call 却没有对应结果，
+                # 消息序列不符合协议，下一次 API 调用会被服务端直接拒绝
                 messages.append({
                     "role": "tool",
                     "tool_call_id": call["id"],
