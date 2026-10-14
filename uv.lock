@@ -267,6 +267,24 @@ wheels = [
 ]
 
 [[package]]
+name = "hello-agents"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beautifulsoup4" },
+    { name = "networkx" },
+    { name = "numpy" },
+    { name = "openai" },
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/71/44/0272a56690e828b9f496d880ebce709d242e0e41ae797e9362a141cb1e3d/hello_agents-0.2.0.tar.gz", hash = "sha256:1078c4ba5c5792bbf01b45fa9027059de99e47733e98a65adb9af242aef0e882", size = 180509, upload-time = "2025-09-30T16:17:25.321Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/c4/9640c2c46d14c71209df396c4c9a45edd07b87d79605d167c2966005cf40/hello_agents-0.2.0-py3-none-any.whl", hash = "sha256:e77f639ec52f104a01dd56a048136b6bd6373767ef1b3d26a310aed6dceebc8f", size = 129606, upload-time = "2025-09-30T16:17:23.659Z" },
+]
+
+[[package]]
 name = "hf-xet"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -559,6 +577,7 @@ dependencies = [
     { name = "anthropic" },
     { name = "beautifulsoup4" },
     { name = "fastembed" },
+    { name = "hello-agents" },
     { name = "httpx" },
     { name = "openai" },
     { name = "pydantic" },
@@ -570,10 +589,20 @@ requires-dist = [
     { name = "anthropic", specifier = ">=1.4.0" },
     { name = "beautifulsoup4", specifier = ">=4.15.0" },
     { name = "fastembed", specifier = ">=0.8.0" },
+    { name = "hello-agents", specifier = ">=0.2.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "openai", specifier = ">=3.8.0" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "python-dotenv", specifier = ">=1.2.3" },
+]
+
+[[package]]
+name = "networkx"
+version = "3.7"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/dc/76/3af777226b63a5e64a6b36b1ec5855c14e2b94a37096d4760e595fc43511/networkx-3.7.tar.gz", hash = "sha256:fd77a511bd90f39f3d016351345b52cf5319b813bdca01de3f755d3cca62e96a", size = 1866482, upload-time = "2026-09-21T16:45:16.974Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/cd/fe58041e9011f307c490e3e17dd48cc516448f7c698a3f2d9d9d65d7e6a8/networkx-3.7-py3-none-any.whl", hash = "sha256:e3fd2c13a7814cee3746340d8d7f8598a67f16a58bf47fb7f8793fab6efca1b0", size = 2142205, upload-time = "2026-09-21T16:45:14.609Z" },
 ]
 
 [[package]]
