@@ -19,12 +19,13 @@
 8. web_fetch(url) - 抓取指定 URL 的网页正文
 9. remember(content) - 写入长期记忆（memory.md，跨会话永久保留）
 
-运行：uv run python agent.py
+运行：uv run python -m my_agent.agent
 """
 import os
 import json
 import re
 from datetime import datetime
+from pathlib import Path
 
 import httpx
 from bs4 import BeautifulSoup
@@ -34,7 +35,7 @@ from openai import OpenAI, APITimeoutError, APIConnectionError, APIStatusError
 
 # Agentic RAG：把 rag.py 的知识库检索挂进本 agent 的工具箱。
 # rag 里的 embedding 模型是懒加载单例，import 本身零负担，直到工具真被调用才加载
-import rag
+from my_agent import rag
 
 load_dotenv()
 
@@ -466,14 +467,17 @@ CONTEXT_COMPACT = 110_000
 COMPACT_KEEP_USER_ROUNDS = 1  # 保留尾部多少个完整 user 轮不压，确保协议合法（assistant+tool 序列完整）
 COMPACT_MAX_TOKENS = 600  # 压缩调用本身的回答上限，足够生成 200~400 字摘要
 
+# 运行数据目录：session / memory / 索引都收在包内 data/ 下，用文件自身定位（cwd 无关）
+_DATA_DIR = Path(__file__).resolve().parent / "data"
+
 # 会话记忆：messages 列表的磁盘快照文件，存整个对话历史（含 user/assistant/tool）。
 # 退出后保留，下次启动时自动恢复 —— 体感验证：今天说的过敏信息明天还在。
-SESSION_PATH = "session.json"
+SESSION_PATH = _DATA_DIR / "session.json"
 
 # 长期记忆：跨会话保留的结论性信息（每行一条，markdown 格式，人类可读）。
 # 启动时由 build_system_prompt() 全文注入 system prompt —— 学习版用全文，
 # 条目多了就升级为 RAG 检索（与 rag.py 同构）
-MEMORY_PATH = "memory.md"
+MEMORY_PATH = _DATA_DIR / "memory.md"
 
 # system prompt 基础部分：clear 重置对话时要保留它（里面有工作目录锚点）
 SYSTEM_PROMPT_BASE = f"""

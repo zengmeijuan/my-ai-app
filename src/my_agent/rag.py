@@ -19,10 +19,11 @@ embedding 模型：jinaai/jina-embeddings-v2-base-zh（本地 ONNX 推理，免�
 161M 参数，768 维，中英双语）——网关不支持 embedding 接口，故走本地路线。
 
 运行：
-  uv run python rag.py build                      # 构建索引（docs/ 变更后重跑）
-  uv run python rag.py ask 退货的钱多久能退回来    # 提问
+  uv run python -m my_agent.rag build                      # 构建索引（docs/ 变更后重跑）
+  uv run python -m my_agent.rag ask 退货的钱多久能退回来    # 提问
 """
 import os
+from pathlib import Path
 
 # ============== 0. 环境变量（必须在 import fastembed 之前！）==============
 
@@ -46,8 +47,10 @@ load_dotenv()  # 读 .env 拿 API_KEY / BASE_URL / MODEL（与 agent.py 同款�
 
 # ============== 1. 配置 ==============
 
-DOCS_DIR = "docs"      # 语料目录：里面的 .md 文件是知识库
-INDEX_PATH = "rag_index.json"  # 索引文件：chunk 文本 + 向量，即本项目的「向量库」本体
+# 数据目录：语料与索引都在包内 data/ 下，用文件自身定位（cwd 无关）
+_DATA_DIR = Path(__file__).resolve().parent / "data"
+DOCS_DIR = _DATA_DIR / "docs"      # 语料目录：里面的 .md 文件是知识库
+INDEX_PATH = _DATA_DIR / "rag_index.json"  # 索引文件：chunk 文本 + 向量，即本项目的「向量库」本体
 EMBED_MODEL = "jinaai/jina-embeddings-v2-base-zh"  # 本地 embedding 模型
 CHAT_MODEL = os.environ.get("MODEL", "gpt-4o-mini")  # 生成侧用网关 chat 模型
 TOP_K = 3              # 每次检索取最相似的 3 个 chunk
@@ -152,7 +155,7 @@ def retrieve(query: str, index: dict) -> list[dict]:
 def ask(query: str):
     """在线管道主函数：检索 top-3 → 拼提示词 → chat 模型生成带引用的回答。"""
     if not os.path.exists(INDEX_PATH):
-        print(f"索引不存在，请先运行: uv run python rag.py build")
+        print(f"索引不存在，请先运行: uv run python -m my_agent.rag build")
         return
     with open(INDEX_PATH, encoding="utf-8") as f:
         index = json.load(f)
@@ -201,14 +204,14 @@ def ask(query: str):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法：")
-        print("  uv run python rag.py build                  # 构建索引（docs/ 变更后重跑）")
-        print("  uv run python rag.py ask <问题>             # 提问，如：")
-        print("      uv run python rag.py ask 退货的钱多久能退回来")
+        print("  uv run python -m my_agent.rag build                  # 构建索引（docs/ 变更后重跑）")
+        print("  uv run python -m my_agent.rag ask <问题>             # 提问，如：")
+        print("      uv run python -m my_agent.rag ask 退货的钱多久能退回来")
     elif sys.argv[1] == "build":
         build_index()
     elif sys.argv[1] == "ask":
         if len(sys.argv) < 3:
-            print("请提供问题，如：uv run python rag.py ask 退货的钱多久能退回来")
+            print("请提供问题，如：uv run python -m my_agent.rag ask 退货的钱多久能退回来")
         else:
             # 问题含空格时 shell 会拆成多个 argv，拼回完整句子
             ask(" ".join(sys.argv[2:]))

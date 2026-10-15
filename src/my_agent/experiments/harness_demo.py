@@ -1,9 +1,9 @@
 from dotenv import load_dotenv
 from hello_agents import ToolRegistry, HelloAgentsLLM, ReActAgent
 # 方式一：register_function 快速接入
-from agent import search_knowledge
+from my_agent.agent import search_knowledge
 # 方式二：Tool 子类
-from my_knowledge_tool import KnowledgeSearchTool
+from my_agent.experiments.my_knowledge_tool import KnowledgeSearchTool
 
 load_dotenv()
 

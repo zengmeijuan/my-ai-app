@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
 from hello_agents.tools import Tool, ToolParameter
-from agent import search_knowledge
+from my_agent.agent import search_knowledge
 
 class KnowledgeSearchTool(Tool):
 	def __init__(self):

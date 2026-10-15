@@ -9,10 +9,10 @@ agent loop / tool registry / permission gate / session store。
 - remember         → @tool_action 装饰器自动展开（hello-agents 0.2.9 内置机制）
 
 用法（在项目根目录）：
-  uv run python harness_experiment.py                  # 跑工单题面（默认）
-  uv run python harness_experiment.py --recall         # 新进程=新会话，验证跨会话召回
-  uv run python harness_experiment.py --question "..." # 换题（陷阱追问用）
-  uv run python harness_experiment.py --dry            # 只打印注册表与 schema，不调 LLM
+  uv run python src/my_agent/experiments/harness_experiment.py                  # 跑工单题面（默认）
+  uv run python src/my_agent/experiments/harness_experiment.py --recall         # 新进程=新会话，验证跨会话召回
+  uv run python src/my_agent/experiments/harness_experiment.py --question "..." # 换题（陷阱追问用）
+  uv run python src/my_agent/experiments/harness_experiment.py --dry            # 只打印注册表与 schema，不调 LLM
 """
 
 import argparse
@@ -24,12 +24,12 @@ from dotenv import load_dotenv
 
 load_dotenv()  # 必须在 import agent 之前：agent.py 模块级创建 OpenAI client
 
-import agent  # 复用裸 loop 的工具实现——两边工具行为一致，只对比框架层
+from my_agent import agent  # 复用裸 loop 的工具实现——两边工具行为一致，只对比框架层
 from hello_agents import FunctionCallAgent, HelloAgentsLLM, ToolRegistry
 from hello_agents.tools import Tool, ToolParameter
 from hello_agents.tools.base import tool_action
 
-from my_knowledge_tool import KnowledgeSearchTool
+from my_agent.experiments.my_knowledge_tool import KnowledgeSearchTool
 
 TICKET_QUESTION = (
     "顾客买了 45 元的台灯和 39 元的小风扇，用微信支付。请回答："
