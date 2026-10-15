@@ -46,5 +46,5 @@ History: {history}
 """
 llm = HelloAgentsLLM()
 agent = ReActAgent(name="商城客服", llm=llm, tool_registry=registry, custom_prompt=CUSTOM_REACT_PROMPT)
-answer = agent.run("星辰商城的退货政策是什么？")
+answer = agent.run("顾客买了 45 元的台灯和 39 元的小风扇，用微信支付。请回答：① 这单收多少运费？② 台灯无理由退货的话，寄回运费谁承担、退款几天到账？")
 print(f"\n最终答案：{answer}")

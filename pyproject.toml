@@ -11,11 +11,13 @@ dependencies = [
     "anthropic>=1.4.0",
     "beautifulsoup4>=4.15.0",
     "fastembed>=0.8.0",
-    "hello-agents>=0.2.0",
+    "hello-agents>=0.2.9,<0.3",
     "httpx>=0.28.1",
-    "openai>=3.8.0",
+    "huggingface-hub>=1.31.0",
+    "openai>=1.100,<2",
     "pydantic>=2.13.5",
     "python-dotenv>=1.2.3",
+    "scikit-learn>=1.9.1",
 ]
 
 [project.scripts]
