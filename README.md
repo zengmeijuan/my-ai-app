@@ -1,6 +1,6 @@
 # my-ai-app 学习路线（求职版）
 
-从零手写 agent 到转岗 agent 应用开发的实战项目。路线对标 [Agent-Learning-Hub](https://github.com/) 的 Learning Todo List，当前进度：里程碑 A 已完成（A-3 跳过，改在 B2 用 LangChain @tool 实现）。
+从零手写 agent 到转岗 agent 应用开发的实战项目。路线对标 [Agent-Learning-Hub](https://github.com/) 的 Learning Todo List，当前进度：里程碑 A、B、B2 已完成（A-3 跳过，改在 B2 用 LangChain @tool 实现），当前进入里程碑 C。
 
 ## 已有资产
 
@@ -23,7 +23,7 @@
 - [ ] 工具注册表重构：装饰器模式，一个函数同时生成实现和 schema（现在 TOOL_FUNCTIONS 和 TOOLS 两处手工维护，容易漂移）→ 验证：新加一个工具只改一处（跳过：改在里程碑 B2 用 LangChain @tool）
 - [x] 多工具并行执行：独立的 tool_call 并发跑（线程池或 asyncio）→ 验证：「北京和上海哪个温度高」耗时约等于单次调用
 
-## 里程碑 B：精读一个现代 agent harness（Stage 3）
+## 里程碑 B：精读一个现代 agent harness
 
 面试谈资：架构对比。选型二选一：hello-agents（中文 / Python / OpenAI 原生 API，最贴现有技术栈）或 learn-claude-code（想深挖 coding agent 形态）。
 
@@ -32,10 +32,10 @@
 - 精读第四章、第七章，加工具
 - 重点看 9.3 的 ContextBuilder 和 9.6长程智能体实战，第八章浏览即可
 
-- [ ] 跑通它的最小示例
-- [ ] 给它加一个自己的工具
-- [ ] 找到并读懂四个关键组件：agent loop、tool registry、permission gate、context compaction / session store
-- [ ] 对比实验：同一个任务用「裸 agent loop」（agent.py 即是）和 harness 各实现一遍 → 验证：对比笔记写清楚裸 loop 差在哪
+- [x] 跑通它的最小示例
+- [x] 给它加一个自己的工具
+- [x] 找到并读懂四个关键组件：agent loop、tool registry、permission gate、context compaction / session store
+- [x] 对比实验：同一个任务用「裸 agent loop」（agent.py 即是）和 harness 各实现一遍 → 验证：对比笔记写清楚裸 loop 差在哪
 
 产出：对比笔记 + 可运行的 harness demo。
 对比结论：裸 loop 不是跑起来弱，是改起来贵
@@ -47,26 +47,26 @@
 
 核心步骤：
 
-- [ ] 用 LangGraph 重写星辰商城客服 agent，工具直接复用 agent.py 现有 9 个函数 → 验证：功能对齐原版
-- [ ] 攻关四个原版没有的能力：checkpoint（替代 session.json 手工落盘）、interrupt（危险工具人工确认）、subgraph（给 search_knowledge 套检索子图）、streaming → 验证：四个能力各有可演示场景
-- [ ] 顺带掌握 LangChain 最小核心抽象：message / model / runnable 是什么、能读懂它的代码即可，不深入 chain 写法
-- [ ] 精读 langchain-ai/open_deep_research 源码（LangGraph 官方 deep research 范例，面试聊架构直接可用）
+- [x] 用 LangGraph 重写星辰商城客服 agent，工具直接复用 agent.py 现有 9 个函数 → 验证：功能对齐原版
+- [x] 攻关四个原版没有的能力：checkpoint（替代 session.json 手工落盘）、interrupt（危险工具人工确认）、subgraph（给 search_knowledge 套检索子图）、streaming → 验证：四个能力各有可演示场景
+- [x] 顺带掌握 LangChain 最小核心抽象：message / model / runnable 是什么、能读懂它的代码即可，不深入 chain 写法
+- [x] 精读 langchain-ai/open_deep_research 源码（LangGraph 官方 deep research 范例，面试聊架构直接可用）
 
-## 里程碑 C：迷你评测（Stage 7 提前）
+## 里程碑 C：迷你评测
 
 简历亮点：评测意识，大多数候选人没有。动机：路线自己的 Learning Principles 就写着「Add evals before you add more agents」。
 
 核心步骤：
 
-- [ ] 建 20~30 条固定测试集：问题 + 期望答案要点 + 应调用的工具
-- [ ] eval.py 可重复运行，输出汇总：正确率、工具调用次数、token 成本、延迟、失败分类
-- [ ] 失败分类四档：检索没命中 / 工具选错 / 编造引用 / 其他
-- [ ] 接入 LangSmith（或 LangFuse）看 trace：打开一次完整调用的 trace，定位一次真实失败 → 验证：能说清失败发生在 prompt / 工具 / 检索 / 模型哪一层
-- [ ] 根据评测结果回头调 rag.py 的 chunking 和检索策略 → 验证：改动前后正确率对比可见
+- [x] 建 20~30 条固定测试集：问题 + 期望答案要点 + 应调用的工具 → 验证：testcases.json v1 定版 25 条（详见 evals/评测笔记.md §2）
+- [x] eval.py 可重复运行，输出汇总：正确率、工具调用次数、token 成本、延迟、失败分类 → 验证：基线 run_20261023_105116 正确率 96%（24/25）
+- [x] 失败分类四档：检索没命中 / 工具选错 / 编造引用 / 其他 → 验证：真实坏例归因入档（R13→other、Z02→tool_extra，评测笔记 §6）
+- [x] 接入 LangSmith（或 LangFuse）看 trace：打开一次完整调用的 trace，定位一次真实失败 → 验证：能说清失败发生在 prompt / 工具 / 检索 / 模型哪一层
+- [x] 根据评测结果回头调 rag.py 的 chunking 和检索策略 → 验证：句级切分对照实验，组件级 hit/rank1 不变、score 重分配（评测笔记 §8），端到端回归 25/25 无退化
 
 产出：eval.md 或 eval.py，可重复跑的评测表。
 
-## 里程碑 D：Skills 与 MCP（Stage 5）
+## 里程碑 D：Skills 与 MCP
 
 选它的原因：MCP 学完马上能用在自己每天用的工具上，正反馈最强。
 
@@ -78,7 +78,7 @@
 - [ ] 写一个最小 SKILL.md：name、何时使用、步骤、验收标准
 - [ ] 了解 A2A / ACP 协议定位（agent 互连 / 宿主接入），概念层面能答即可，不实现
 
-## 里程碑 E：多 agent 压缩版（Stage 4，用 LangGraph 做）
+## 里程碑 E：多 agent 压缩版
 
 原则：做小不做大，一个三角色系统足以理解协调问题，不碰 CrewAI 类模板化框架。
 
@@ -92,11 +92,11 @@
 
 产出：一个小型多 agent 系统。
 
-## 里程碑 F（可选支线）：浏览器 agent（Stage 6）
+## 里程碑 F（可选支线）：浏览器 agent
 
 按兴趣和目标岗位决定做不做。做的话用 browser-use，只操作公开网页，记录截图和动作日志方便复盘。
 
-## 里程碑 G：安全加固与服务化（Stage 7 剩余 + Stage 8）
+## 里程碑 G：安全加固与服务化
 
 简历亮点：项目闭环——别人能 clone 下来跑。两个现成的安全素材就在本项目里。
 
