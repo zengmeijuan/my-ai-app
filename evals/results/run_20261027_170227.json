@@ -1,0 +1,46 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "chitchat": "1/1"
+  },
+  "latency_avg_s": 2.19,
+  "latency_p50_s": 2.19,
+  "latency_p95_s": 2.19,
+  "tokens_in": 519,
+  "tokens_out": 142,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step1",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-27T17:02:27",
+  "skipped": [],
+  "records": [
+    {
+      "id": "Z01",
+      "category": "chitchat",
+      "question": "你好，你是谁呀？",
+      "answer": "您好！我是星辰商城的客服助手 😊\n\n我可以帮您解答以下方面的问题：\n\n- 📦 **运费与配送**：包邮门槛、配送方式等\n- 🔄 **退换货**：退货条件、退款流程、时限\n- 💳 **会员与积分**：会员权益、积分获取与使用\n- 🛒 **订单与商品**：下单、改单、售后等常见问题\n\n您有什么想了解的，直接告诉我就可以啦～",
+      "called_tools": [],
+      "expected_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 2.19,
+      "tokens_in": 519,
+      "tokens_out": 142,
+      "retrieved_context": "",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答直接、如实介绍了自身身份（商城客服助手），切题且未编造政策，并友好引导用户继续提问，符合常识要求。",
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}

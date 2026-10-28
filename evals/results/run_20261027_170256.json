@@ -1,0 +1,46 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "chitchat": "1/1"
+  },
+  "latency_avg_s": 2.37,
+  "latency_p50_s": 2.37,
+  "latency_p95_s": 2.37,
+  "tokens_in": 406,
+  "tokens_out": 138,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step5",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-27T17:02:56",
+  "skipped": [],
+  "records": [
+    {
+      "id": "Z01",
+      "category": "chitchat",
+      "question": "你好，你是谁呀？",
+      "answer": "你好呀！我是星辰商城的客服助手 😊\n\n我可以帮你解答这些问题：\n\n- **运费**：配送范围、运费标准、包邮条件\n- **退货退款**：退货时限、退款流程、到账时间\n- **会员权益**：会员等级、专属优惠\n- **积分**：获取方式、兑换规则\n\n有什么想了解的，直接问我就行～如果涉及具体金额（比如退款能退多少、运费怎么算），我可以帮你算清楚。",
+      "called_tools": [],
+      "expected_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 2.37,
+      "tokens_in": 406,
+      "tokens_out": 138,
+      "retrieved_context": "",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答如实表明了客服助手身份，切题且友好，仅列举常规服务范围（运费、退换货、会员、积分），未编造具体政策或承诺，符合常识判断标准。",
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}
