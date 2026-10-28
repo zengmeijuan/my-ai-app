@@ -1,0 +1,45 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "tool": "1/1"
+  },
+  "latency_avg_s": 5.8,
+  "latency_p50_s": 5.8,
+  "latency_p95_s": 5.8,
+  "tokens_in": 1849,
+  "tokens_out": 277,
+  "cost_usd": null,
+  "judge_calls": 0,
+  "errors": 0,
+  "graph": "step1",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-23T10:44:56",
+  "records": [
+    {
+      "id": "T01",
+      "category": "tool",
+      "question": "台灯 45 元，小风扇 39 元，两件一共多少钱？",
+      "answer": "您好，台灯 45 元 + 小风扇 39 元，两件一共 **84 元**。\n\n有其他需要（比如运费、优惠、会员积分）也可以告诉我，我帮您一起确认。",
+      "called_tools": [
+        "calculate",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 5.8,
+      "tokens_in": 1849,
+      "tokens_out": 277,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "84"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    }
+  ]
+}

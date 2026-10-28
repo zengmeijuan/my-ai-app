@@ -1,0 +1,645 @@
+{
+  "total": 25,
+  "pass": 24,
+  "accuracy": 96.0,
+  "by_category": {
+    "retrieval": "14/15",
+    "tool": "3/3",
+    "combo": "3/3",
+    "refusal": "2/2",
+    "chitchat": "2/2"
+  },
+  "latency_avg_s": 7.59,
+  "latency_p50_s": 6.83,
+  "latency_p95_s": 12.59,
+  "tokens_in": 70307,
+  "tokens_out": 10971,
+  "cost_usd": null,
+  "judge_calls": 6,
+  "errors": 0,
+  "graph": "step1",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-23T10:51:16",
+  "records": [
+    {
+      "id": "R01",
+      "category": "retrieval",
+      "question": "七天无理由退货的条件是什么？",
+      "answer": "您好，以下是星辰商城七天无理由退货的条件（依据《退货政策》）：\n\n**一、基本条件**\n1. **时间**：在**签收后 7 天内**提出申请；\n2. **商品状态**：吊牌完整、配件齐全、不影响二次销售，即未使用、未损坏、未影响商品价值；\n3. **申请入口**：「我的订单 → 申请售后」；\n4. **寄回方式**：审核通过后，按页面提示寄回商品；\n5. **运费**：非质量问题造成的退货运费，由**用户承担**。\n\n**二、不支持七天无理由退货的商品**\n- 贴身内衣、袜子\n- 食品饮料\n- 定制商品\n- 已激活的电子产品\n\n⚠️ 特别说明：以上商品如果存在**质量问题**，不受七天无理由退货限制，可随时申请退换。\n\n如果您方便提供具体订单和商品情况，我可以帮您进一步确认是否在可退范围内。",
+      "called_tools": [
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 8.76,
+      "tokens_in": 2469,
+      "tokens_out": 404,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "吊牌完整",
+        "配件齐全"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R02",
+      "category": "retrieval",
+      "question": "钱多久能回来？",
+      "answer": "您好，以下是退款到账的时效说明（依据我们的退货政策）：\n\n**退款从售后审核通过后开始，按原支付路径退回：**\n- 微信 / 支付宝：1–3 个工作日\n- 银行卡：3–7 个工作日\n- 星辰钱包余额：实时到账\n\n**几点提醒：**\n- 到账时间从**审核通过**那一刻开始算，不是从您提交申请的时间开始算。\n- 遇节假日可能顺延。\n- 如果超过 7 个工作日仍未收到退款，请联系我们客服，我们会帮您核查。\n\n如果您方便提供订单号或支付方式，我可以帮您进一步确认退款状态。",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 6.19,
+      "tokens_in": 3017,
+      "tokens_out": 447,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [
+        "1-3 个工作日",
+        "3-7 个工作日"
+      ],
+      "judge_used": true,
+      "judge_reason": "回答完整覆盖了两个期望要点（微信/支付宝1-3个工作日、银行卡3-7个工作日），并补充了到账起算时间、节假日顺延等合理提醒，未答反、未缺失关键事实。",
+      "pass": true
+    },
+    {
+      "id": "R03",
+      "category": "retrieval",
+      "question": "运费怎么算？",
+      "answer": "您好，星辰商城的运费规则如下：\n\n**1. 满99元免运费**\n- 单笔订单**实付满99元免运费**\n- **不满99元**收取 **6元** 基础运费\n\n**2. 偏远地区远程运费**\n- 新疆、西藏、青海部分地区需**加收10元**远程运费\n\n**3. 满减活动算法**\n- 参加满减活动后，**以实际支付金额**来判断是否达到免运费门槛\n\n举个例子：订单原价105元，参加满减后实付95元，因为未达99元，需支付6元基础运费。\n\n请问您需要下单到哪个地区？我可以帮您确认具体运费金额。",
+      "called_tools": [
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 6.22,
+      "tokens_in": 2391,
+      "tokens_out": 310,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "99",
+        "6 元"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R04",
+      "category": "retrieval",
+      "question": "积分会过期吗？",
+      "answer": "您好，会过期的，具体规则如下：\n\n- **有效期**：积分自**获得之日起一年内**有效，过期后**自动清零**，不会另行通知。\n- **获取方式**：每消费 1 元积 1 分，评价晒单还可获得额外积分。\n- **使用方式**：100 积分抵 1 元，可在积分商城兑换商品，也可在结算时抵现。\n\n建议您留意手上积分的获得时间，趁在有效期内用掉，避免清零损失哦～（依据《会员权益.md》积分规则）",
+      "called_tools": [
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 6.83,
+      "tokens_in": 2412,
+      "tokens_out": 322,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "一年",
+        "清零"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R05",
+      "category": "retrieval",
+      "question": "信用卡分期手续费是多少？",
+      "answer": "您好，关于信用卡分期手续费，我为您查询了相关规则：\n\n- **可用条件与期数**：单笔订单金额满 500 元可使用信用卡分期或星辰分期，支持 3 期、6 期、12 期。\n- **手续费说明**：目前知识库中仅说明：星辰分期的部分商品可免手续费，具体是否免手续费及金额，以**结算页显示为准**。关于信用卡分期的**具体手续费率（百分比），知识库没有载明**；实际费率以您提交订单时结算页显示的金额、以及发卡行的分期政策为准。\n\n如需，我可帮您确认某款商品在结算页的分期费率；请您提供商品名称或订单金额。此外提醒：分期订单发生退款时，已出账单的期数由银行原路退回。",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 4,
+      "latency_s": 8.23,
+      "tokens_in": 4664,
+      "tokens_out": 550,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "500",
+        "结算页"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R06",
+      "category": "retrieval",
+      "question": "账号被冻结了怎么解除？",
+      "answer": "您好，关于账号冻结，按知识库中的说明，分两种情况：\n\n**1. 登录异常触发的临时冻结**\n异地登录、频繁验证失败会触发账号保护，账号会被**临时冻结 2 小时**，可以用**手机验证码自助解冻**。\n如果发现账号有非本人操作，请**立即修改密码并联系客服**处理。\n\n**2. 其他原因（如违规等）的冻结**\n知识库中未收录这类冻结的解除流程，我无法给您准确答复，建议直接转人工客服核实，以免给您错误信息。\n\n方便的话，您可以说一下冻结时页面提示的原因，我帮您判断属于哪种情况。\n\n（以上结论已记入长期记忆，下次咨询可直接沿用。）",
+      "called_tools": [
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 6.55,
+      "tokens_in": 2338,
+      "tokens_out": 393,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "2 小时",
+        "验证码"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R07",
+      "category": "retrieval",
+      "question": "买了一条裙子，可以七天无理由退货吗？",
+      "answer": "您好，裙子**可以**申请七天无理由退货。\n\n回复话术（可直接发送给顾客）：\n\n您好，裙子属于支持七天无理由退货的商品。\n\n- **退货条件**：签收后 7 天内申请；商品吊牌完整、配件齐全、不影响二次销售。\n- **申请入口**：我的订单 → 申请售后，审核通过后按页面提示寄回商品。\n- **寄回运费**：非质量问题的寄回运费由您承担；如果是商品本身的质量问题，不受七天限制，可随时申请退换，运费另按质量问题处理。\n- **退款到账**：审核通过后原路退回，微信/支付宝 1-3 个工作日到账，银行卡 3-7 个工作日到账，星辰钱包余额实时到账。节假日可能顺延；若超过 7 个工作日仍未到账，可联系客服查询。\n\n建议您尽快在签收后 7 天内提交申请，并保留好吊牌哦～",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 4,
+      "latency_s": 7.92,
+      "tokens_in": 4668,
+      "tokens_out": 585,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "7 天",
+        "吊牌"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R08",
+      "category": "retrieval",
+      "question": "内衣可以七天无理由退货吗？",
+      "answer": "**回复（可直接发送给顾客）：**\n\n您好，感谢咨询星辰商城～\n\n关于内衣的退货：按照《退货政策》，**贴身内衣属于不支持七天无理由退货的商品**（同类商品还有袜子、食品饮料、定制商品、已激活的电子产品）。\n\n不过有两种情况需要区分：\n1. **质量问题**：如果商品存在质量瑕疵，不受上述限制，**随时可以申请退换**；\n2. **其他商品**：普通商品支持签收后 7 天内无理由退货；商品需吊牌完整、配件齐全、不影响二次销售；申请入口为「我的订单 → 申请售后」；审核通过后寄回；非质量问题的寄回运费由您承担。\n\n如果您的内衣有质量问题，或想确认具体订单的处理方式，可以告诉我订单号，我帮您进一步核对～",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 5.59,
+      "tokens_in": 2788,
+      "tokens_out": 371,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "不支持",
+        "质量"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R09",
+      "category": "retrieval",
+      "question": "冰箱这种大件会送上门安装吗？",
+      "answer": "**关于冰箱等大件的送货和安装**\n\n会的。根据《配送说明》：\n\n1. **送货上门**：冰箱、洗衣机、沙发等大件商品由**专属物流**配送，提供**免费送货上楼**服务；\n2. **安装服务**：同样**免费**提供安装；\n3. **配送预约**：送达前，物流专员会**电话预约**时间，请您保持电话畅通，方便沟通具体的送货时段。\n\n**顺便补充两点参考信息：**\n- 配送范围：全国（不含港澳台）；一线城市（北京、上海、广州、深圳）自营仓发货次日达，二三线城市 2-3 天，偏远地区 5-7 天；\n- 若收货后需要退换：签收后 7 天内可申请无理由退货，商品需吊牌完整、配件齐全、不影响二次销售，非质量问题的寄回运费需您承担。\n\n您看还有别的需要我帮您确认的吗？",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 7.61,
+      "tokens_in": 2873,
+      "tokens_out": 397,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "上楼",
+        "安装"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R10",
+      "category": "retrieval",
+      "question": "宇宙卡会员有什么专属权益？",
+      "answer": "您好，宇宙卡是星辰商城会员体系中最高等级的会员。根据《会员权益》资料，宇宙卡会员专享权益如下：\n\n**一、宇宙卡专属权益**\n1. **不限次免运费**：不限次数，结算时自动抵扣运费（银河卡会员是每月一张免运费券）。免运费权益不可转让，也不可折现。\n2. **专属客服通道**：享受专属客服服务通道。\n3. **生日礼包**：生日时可获得专属礼包。\n\n**二、升级与等级规则**\n- 升级条件：自然年内累计消费满 **5000 元**，即可升级为宇宙卡（满 1000 元升级银河卡）。\n- 等级有效期为 **一年**，次年重新累计消费金额。等级越高，可享受的权益越多。\n\n如需了解您当前的会员等级或累计消费进度，可以告诉我，我帮您进一步核实。",
+      "called_tools": [
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 6.13,
+      "tokens_in": 2320,
+      "tokens_out": 400,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "免运费",
+        "专属客服",
+        "生日礼包"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R11",
+      "category": "retrieval",
+      "question": "电子发票什么时候发给我？",
+      "answer": "您好，感谢您的咨询！关于电子发票的发送时间，说明如下：\n\n**电子发票：发货后 24 小时内**，发送到您下单时预留的邮箱。\n\n另外几点补充：\n- 下单时勾选「开具发票」，才能开票；未勾选需联系客服补开；\n- 支持**电子普通发票**和**增值税专用发票**两种；增值税专用发票需提供企业税号，**每月统一开具一次**；\n- 如果您确认发票一直没收到，建议先查看预留邮箱地址是否填写正确，也可能被归入垃圾邮件；若仍未找到，可随时联系客服帮您查询。\n\n需要我帮您核对某笔订单的开票状态吗？",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 5.2,
+      "tokens_in": 2863,
+      "tokens_out": 362,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "24 小时",
+        "邮箱"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R12",
+      "category": "retrieval",
+      "question": "忘记密码怎么办？",
+      "answer": "已为您查到相关信息，可发送给顾客的答复如下：\n\n---\n\n您好，忘记密码不用着急～\n\n**找回方式**：在登录页点击「忘记密码」，通过**手机号验证**即可找回/重置登录密码。\n\n**顺带两点小提醒：**\n1. 密码建议**至少 8 位**，包含字母、数字和符号，避免使用生日、手机号等容易被猜到的信息，也不要与其他网站用同一个密码。\n2. 星辰商城**不会以任何形式索要您的密码**，任何人（包括自称客服）向您要密码都不要提供。\n\n另外，如果是因为异地登录、频繁验证失败导致账号被**临时冻结 2 小时**，可以用手机验证码自助解冻；若发现账号有非本人操作，请立即修改密码并联系客服。\n\n---\n\n以上内容依据知识库《账号安全》资料整理。如需我进一步说明某个步骤，请告诉我。",
+      "called_tools": [
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 8.16,
+      "tokens_in": 2317,
+      "tokens_out": 391,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "手机"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R13",
+      "category": "retrieval",
+      "question": "星辰钱包里的钱可以提现吗？",
+      "answer": "已按知识库口径答复，并将该结论写入长期记忆，后续会话可直接引用。",
+      "called_tools": [
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 5.42,
+      "tokens_in": 2481,
+      "tokens_out": 364,
+      "error": "",
+      "answer_ok": false,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [
+        "提现"
+      ],
+      "judge_used": true,
+      "judge_reason": "客服回答未包含任何关于\"提现\"的实际答复内容，仅是流程性说明，未回答用户问题，缺少期望要点\"提现\"。",
+      "pass": false
+    },
+    {
+      "id": "R14",
+      "category": "retrieval",
+      "question": "注销账号之后，我的数据还会保留多久？",
+      "answer": "您好，关于账号注销后的数据保留时间，依据《账号安全》中的说明：\n\n**注销后，您的账号数据会保留 30 天，用于反欺诈核查；30 天期满后，将永久删除。**\n\n另外提醒两点注销前需要满足的条件：\n1. 所有进行中的订单需处理完毕；\n2. 钱包中的余额需先退回。\n\n注销申请入口：在「设置 → 账号安全 → 注销账号」可自助提交。\n\n如果您在注销前还有其他疑问，比如订单处理或余额提取，随时告诉我。",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 6.14,
+      "tokens_in": 2960,
+      "tokens_out": 314,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "30 天"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "R15",
+      "category": "retrieval",
+      "question": "我用银行卡付款，退货退款几天能到账？",
+      "answer": "亲爱的顾客，您好！关于银行卡付款的退货退款到账时间，为您说明如下：\n\n**银行卡退款：3-7 个工作日到账**\n\n退款会在**售后审核通过后按原路退回**，也就是退回您支付时使用的银行卡。其他支付方式的到账时间供您参考：\n- 微信 / 支付宝：1-3 个工作日\n- 星辰钱包余额：实时到账\n- 银行卡：3-7 个工作日\n\n温馨提示：\n1. 遇节假日，到账时间可能顺延；\n2. 如果超过 7 个工作日仍未到账，请联系客服，我们会为您查询处理。\n\n另外，退货申请入口在「我的订单 → 申请售后」，签收后 7 天内可申请无理由退货，需保持吊牌完整、配件齐全、不影响二次销售（贴身内衣、袜子、食品饮料、定制商品、已激活的电子产品不支持七天无理由退货，质量问题除外）。\n\n如需我帮您查询具体订单的退款进度，请提供订单号，很高兴为您服务～",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 5.37,
+      "tokens_in": 3015,
+      "tokens_out": 423,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "3-7 个工作日"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "T01",
+      "category": "tool",
+      "question": "台灯 45 元，小风扇 39 元，两件一共多少钱？",
+      "answer": "您好～台灯 45 元 + 小风扇 39 元，两件一共是 **84 元**。\n\n如需一起下单或了解运费政策，我可以帮您查询。",
+      "called_tools": [
+        "calculate",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 11.65,
+      "tokens_in": 1861,
+      "tokens_out": 237,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "84"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "T02",
+      "category": "tool",
+      "question": "我购物车里的商品一共 92 元，离包邮还差多少元？",
+      "answer": "您好，帮您查好了：\n\n- 本店单笔订单**实付满 99 元免运费**，不满 99 元收取 **6 元基础运费**。\n- 您购物车目前是 **92 元**，距离包邮门槛还差 **7 元**。\n\n给您的两条建议：\n1. 再凑 7 元，实付达到 99 元，就能免掉 6 元运费，相当于凑单更划算；\n2. 如果不想凑单，直接下单也可，系统会加收 6 元运费，实际支付 98 元。\n\n另外提醒两点：\n- 如果订单使用了满减活动，是按**实付金额**来判断是否达到 99 元免运费门槛的，凑单时请留意活动后的实付金额；\n- 若收货地址在**新疆、西藏、青海部分地区**，需另加 10 元远程运费，这部分即使满 99 元也不免除。\n\n需要我帮您看看有哪些低价商品可以凑单吗？",
+      "called_tools": [
+        "search_knowledge",
+        "calculate",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 8.63,
+      "tokens_in": 3398,
+      "tokens_out": 444,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "7 元"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "T03",
+      "category": "tool",
+      "question": "我这个月消费了 1200 元，能获得多少积分？",
+      "answer": "以下是可直接发送给顾客的答复：\n\n---\n\n您好～根据我们的积分规则，**每消费 1 元积 1 分**，所以您这个月消费 1200 元，可以获得 **1200 积分**。\n\n关于这些积分的用法，也一并说明一下：\n\n- **下单抵现**：100 积分抵 1 元，您的 1200 积分相当于 **12 元**；\n- **积分商城**：也可以直接在积分商城兑换商品；\n- **有效期**：积分从获得之日起 **一年内有效**，过期会自动清零，记得及时使用哦～\n\n另外提醒您一个好消息：积分规则所在的会员权益中还有等级成长规则，即**自然年内累计消费满 1000 元可升级银河卡**（满 5000 元升级宇宙卡），等级越高享受的权益越多。您本月消费已达标，如果年内累计已满 1000 元，就符合升级条件啦，可以在“我的-会员中心”查看一下～\n\n（评价晒单还能额外获得积分，别忘了晒单哦～）",
+      "called_tools": [
+        "search_knowledge",
+        "calculate",
+        "calculate",
+        "remember"
+      ],
+      "n_tool_calls": 4,
+      "latency_s": 17.34,
+      "tokens_in": 3438,
+      "tokens_out": 518,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "1200"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "C01",
+      "category": "combo",
+      "question": "顾客买了 45 元的台灯和 39 元的小风扇，用微信支付。请回答：① 这单收多少运费？② 台灯无理由退货的话，寄回运费谁承担、退款几天到账？",
+      "answer": "以下是可以直接发给顾客的答复：\n\n**① 运费：6 元**\n\n- 您这单是 45 元台灯 + 39 元小风扇，实付合计 **84 元**，没有达到 99 元的免运费门槛，因此要收取 6 元基础运费。\n- 说明一下：判断免不免运费，看的是**实付金额**；如果参加了满减活动，也按满减后的实付金额判断。您还差 15 元就可以免运费。\n- 另外，如果收货地址在**新疆、西藏、青海**的部分地区，需要再加收 10 元远程运费；其他地区没有这笔费用。\n- 如果您是银河卡或宇宙卡会员，结算时免运费券会自动抵扣这 6 元。\n\n**② 台灯无理由退货**\n\n- **寄回运费：由您承担。** 无理由退货属于非质量问题，运费由用户承担；如果是商品本身的质量问题，就不受这个限制，可以随时申请退换，运费规则也不同。\n- **退款到账：1-3 个工作日。** 退款在售后审核通过后**原路退回**，您用微信支付，所以会退回微信，通常 1-3 个工作日到账；遇节假日可能顺延，超过 7 个工作日还没到账，请联系客服查询。\n- 温馨提示：需在**签收后 7 天内**申请，商品要保持吊牌完整、配件齐全、不影响二次销售；申请入口在「我的订单 → 申请售后」。",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "calculate",
+        "calculate",
+        "remember"
+      ],
+      "n_tool_calls": 5,
+      "latency_s": 8.6,
+      "tokens_in": 4504,
+      "tokens_out": 764,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "6 元",
+        "用户承担",
+        "1-3 个工作日"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "C02",
+      "category": "combo",
+      "question": "满 99 元包邮，我购物车现在有 92 元的商品，再买多少钱的商品就能免运费？",
+      "answer": "您好，根据星辰商城的运费规则：单笔订单**实付满 99 元免运费**，不满 99 元则收取 6 元基础运费。\n\n您购物车目前是 92 元，**再买 7 元的商品**（99 - 92 = 7）就能达到 99 元门槛，享受免运费。\n\n补充两点提醒：\n1. 如果您有满减活动，门槛按**满减后的实付金额**判断；如果实付金额被减到 99 元以下，就仍需支付运费；\n2. 如果收货地址在新疆、西藏、青海部分地区，还需额外加收 10 元远程运费，这类订单即使满 99 元也无法免除这笔远程运费。",
+      "called_tools": [
+        "search_knowledge",
+        "calculate",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 7.7,
+      "tokens_in": 2573,
+      "tokens_out": 573,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "7 元"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "C03",
+      "category": "combo",
+      "question": "我是宇宙卡会员，买一台 50 元的小台灯要收运费吗？",
+      "answer": "您好，可以直接发给顾客的答复如下：\n\n---\n\n您好～您是我们的宇宙卡会员，可以享受**不限次免运费**权益 🌟\n\n关于这台 50 元的小台灯：\n\n1. **基础运费**：本店规定单笔订单实付满 99 元免运费，不满 99 元收 6 元基础运费。您这单 50 元本想收 6 元，但您是宇宙卡会员，可享不限次免运费，因此**这 6 元基础运费可以免掉**，实际不需要付基础运费。\n\n2. **远程运费**：如果收货地址在新疆、西藏、青海的部分地区，我们会加收 10 元远程运费。至于这 10 元在宇宙卡会员权益下是否也能免除，目前规定里没有明确说明，我不能随意答复您。\n\n所以想请您把**收货地址（省市区）**告诉我，我帮您确认一下是否存在远程运费、需要如何计算。如果不在上述偏远地区，那这单就是**完全免运费**的。\n\n---\n\n补充说明（供您内部参考）：知识库中《配送说明.md》只写明满 99 元免运费、不满收 6 元，以及新疆、西藏、青海部分地区的 10 元远程运费；《会员权益.md》只写“宇宙卡会员不限次免运费”，两份资料都没有说明偏远地区远程运费是否在免运费权益范围内，因此这一条我按“需进一步确认”处理，未做推断。",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 12.59,
+      "tokens_in": 2945,
+      "tokens_out": 648,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "免运费"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    },
+    {
+      "id": "X01",
+      "category": "refusal",
+      "question": "星辰商城可以到店自提吗？",
+      "answer": "关于\"到店自提\"，我查阅了现有的配送相关说明，**其中没有找到任何门店自提或自提点的条款**；因此，我不能凭空给出肯定答复，以下内容供您参考：\n\n您好，感谢您的咨询！\n\n目前我手上的资料里只说明了快递配送方式，**暂时没有查到\"到店自提/自提点\"的相关政策**，所以无法确定是否支持自提。建议您下单时查看结算页面可选的配送方式；如果页面上没有\"自提\"选项，或您仍有疑问，请联系在线客服人工确认。\n\n以下是现有配送规则，供您参考：\n- **配送范围**：全国配送（不含港澳台）。\n- **配送时效**：北京、上海、广州、深圳等一线城市从自营仓发货，次日送达；二三线城市 2–3 天送达；偏远地区 5–7 天送达。预售商品以商品页面标注的发货时间为准。\n- **运费**：单笔订单实付满 99 元免运费；不满 99 元收取 6 元基础运费；新疆、西藏、青海部分地区需加收 10 元远程运费。参加满减活动后，以实付金额判断是否达到免运费门槛。\n- **大件商品**：冰箱、洗衣机、沙发等由专属物流配送，提供免费送货上楼和安装服务，配送前物流专员会电话预约时间，请保持电话畅通。\n\n如果后续有自提服务的消息，我会及时补充给您。",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 4,
+      "latency_s": 8.0,
+      "tokens_in": 4601,
+      "tokens_out": 661,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答切题且诚实：明确说明知识库中未查到自提政策、不编造结论，同时给出可行的核实途径（结算页查看配送方式、联系人工客服）并附上相关配送规则供参考，内容如实且有帮助。",
+      "pass": true
+    },
+    {
+      "id": "X02",
+      "category": "refusal",
+      "question": "你们支持花呗付款吗？",
+      "answer": "您好，感谢您的咨询！关于花呗付款，我为您核实了资料：\n\n**目前知识库中明确列出的支付渠道为：**\n- 微信支付\n- 支付宝\n- 主流银行卡（储蓄卡、信用卡）\n- 星辰钱包余额（可绑定银行卡充值，充值金额不可提现，可用于购买任意商品）\n\n**关于花呗：** 资料中并没有明确写明支持“花呗”。花呗是支付宝下的信用支付产品，但资料只提到“支付宝”这一渠道，不能等同于已开通花呗。所以我不敢直接向您保证支持，建议以**结算页实际可选方式**为准；如果结算页显示花呗可选，就可以用；若没有显示，则暂时不支持。\n\n补充一个可能相关的信息：订单金额满 500 元可使用**信用卡分期或星辰分期**（支持 3 期、6 期、12 期），星辰分期部分商品免手续费，具体以结算页显示为准。\n\n如果您需要，我可以帮您转接人工，向人工客服确认花呗是否已开通。",
+      "called_tools": [
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 8.81,
+      "tokens_in": 2373,
+      "tokens_out": 526,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答如实说明知识库未明确列出花呗、未编造支持或不支持的结论，正确区分支付宝渠道与花呗信用支付，并给出以结算页为准和转人工核实的可行建议，切题且无虚构政策。",
+      "pass": true
+    },
+    {
+      "id": "Z01",
+      "category": "chitchat",
+      "question": "你好，你是谁呀？",
+      "answer": "您好！我是星辰商城的客服助手，很高兴为您服务 😊\n\n我可以帮您解答以下方面的问题：\n- **运费与配送**：包邮门槛、配送时效、偏远地区运费等\n- **退换货**：退货条件、退款流程与到账时间\n- **会员权益**：会员等级、开通与优惠\n- **积分**：获取方式、使用规则与兑换\n\n请问有什么可以帮到您的吗？您直接说出具体问题就好，比如「多少钱包邮」「买错了能退吗」，我会帮您查清楚～",
+      "called_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 2.13,
+      "tokens_in": 519,
+      "tokens_out": 174,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答直接、如实表明身份（商城客服助手），礼貌切题，仅列举可咨询的问题范围，未编造具体政策，符合常识要求。",
+      "pass": true
+    },
+    {
+      "id": "Z02",
+      "category": "chitchat",
+      "question": "你都能帮我做什么？",
+      "answer": "我是星辰商城的客服助手，主要可以帮您处理这些事：\n\n**📦 购物政策咨询**\n- 运费规则（包邮门槛、偏远地区是否加收等）\n- 退换货政策（可退条件、时效、运费由谁承担）\n- 会员权益、积分获取与使用规则\n\n以上内容我都会先查询商城知识库，按官方条款回答；**知识库中没有的内容，我会如实告诉您“暂时查不到”，不会凭空编造。**\n\n**🧮 金额帮您算清楚**\n- 订单金额、优惠后差价、退款金额、运费差额等\n- 例如：“我买了 3 件，满 199 包邮吗？”“退掉一件后该退我多少钱？”\n\n**🗒️ 记住您的诉求**\n- 您咨询过的关键结论可以帮您记录下来，下次会话还能接着聊，不用重复说明。\n\n**我能做的：** 查政策、算金额、解释规则、记录结论。\n**我不能做的：** 查您的真实订单和物流（需要订单系统权限）、直接操作退款或修改订单、处理投诉升级——这些需要转人工客服。\n\n您可以直接把问题丢给我，比如“退货要自己出运费吗？”或者“我买了两百多，能包邮吗？”我来帮您查。",
+      "called_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 3.86,
+      "tokens_in": 519,
+      "tokens_out": 393,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答切题且结构清晰，如实列举了可提供的服务（政策咨询、金额计算、记录诉求）并明确说明能力边界和转人工情形，未编造具体政策内容，符合期望要点。",
+      "pass": true
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "retrieval": "1/1"
+  },
+  "latency_avg_s": 8.22,
+  "latency_p50_s": 8.22,
+  "latency_p95_s": 8.22,
+  "tokens_in": 2917,
+  "tokens_out": 411,
+  "cost_usd": null,
+  "judge_calls": 0,
+  "errors": 0,
+  "graph": "step1",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-23T10:52:39",
+  "records": [
+    {
+      "id": "R13",
+      "category": "retrieval",
+      "question": "星辰钱包里的钱可以提现吗？",
+      "answer": "以下内容可直接发送给顾客：\n\n您好，关于星辰钱包的提现问题，为您说明如下：\n\n- **充值进来的钱不能提现**：星辰钱包可以绑定银行卡进行充值，但充值金额不支持提现，仅可用于在商城购买任意商品。\n- **退款到钱包余额的部分**：退款会按原路退回，退到星辰钱包余额是**实时到账**的；不过知识库中没有关于“余额能否提现”的专门说明，我只能如实告知暂无相关条款，无法为您确认。\n\n建议：如果您想把资金取回，可考虑选择原路退回微信、支付宝或银行卡（微信、支付宝通常 1-3 个工作日到账，银行卡 3-7 个工作日到账）。如确需确认钱包余额提现的可能性，建议联系人工客服进一步核实。",
+      "called_tools": [
+        "search_knowledge",
+        "search_knowledge",
+        "remember"
+      ],
+      "n_tool_calls": 3,
+      "latency_s": 8.22,
+      "tokens_in": 2917,
+      "tokens_out": 411,
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "提现"
+      ],
+      "points_missed": [],
+      "judge_used": false,
+      "judge_reason": "",
+      "pass": true
+    }
+  ]
+}
