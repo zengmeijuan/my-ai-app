@@ -6,6 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+# IDE workspace files (PyCharm/IntelliJ personal config)
+.idea/
+
 # Virtual environments
 .venv
 
