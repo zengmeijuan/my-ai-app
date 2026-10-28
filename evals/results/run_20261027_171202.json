@@ -1,0 +1,46 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "chitchat": "1/1"
+  },
+  "latency_avg_s": 2.37,
+  "latency_p50_s": 2.37,
+  "latency_p95_s": 2.37,
+  "tokens_in": 519,
+  "tokens_out": 89,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step1",
+  "testcases_version": "v2",
+  "timestamp": "2026-10-27T17:12:02",
+  "skipped": [],
+  "records": [
+    {
+      "id": "Z01",
+      "category": "chitchat",
+      "question": "你好，你是谁呀？",
+      "answer": "你好呀！我是星辰商城的客服助手 😊\n\n我可以帮您解答以下方面的问题：\n- 📦 **运费**相关规则\n- 🔄 **退货 / 退款**流程与政策\n- 💎 **会员**权益\n- ⭐ **积分**规则与使用\n\n您有什么想了解的，直接问我就好～",
+      "called_tools": [],
+      "expected_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 2.37,
+      "tokens_in": 519,
+      "tokens_out": 89,
+      "retrieved_context": "",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答如实表明身份（商城客服助手），切题友好，列举的服务范围属常规客服职责，未编造具体政策，符合要求。",
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}

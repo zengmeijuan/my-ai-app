@@ -1,0 +1,54 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "retrieval": "1/1"
+  },
+  "latency_avg_s": 12.01,
+  "latency_p50_s": 12.01,
+  "latency_p95_s": 12.01,
+  "tokens_in": 2110,
+  "tokens_out": 252,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step1",
+  "testcases_version": "v2",
+  "timestamp": "2026-10-27T17:05:29",
+  "skipped": [],
+  "records": [
+    {
+      "id": "R04",
+      "category": "retrieval",
+      "question": "积分会过期吗？",
+      "answer": "您好！积分是会过期的～\n\n根据我们的《会员权益》规则：\n- **积分自获得之日起一年内有效，过期后会自动清零**，建议您留意各笔积分的到账时间，尽早使用。\n- 另外补充一下积分的用途：积分可在**积分商城兑换商品**，也可在**下单时抵现，100积分抵1元**。\n\n如果您想查询当前积分余额或即将过期的积分明细，可以告诉我，我再为您进一步核实。",
+      "called_tools": [
+        "search_knowledge",
+        "remember"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
+      "n_tool_calls": 2,
+      "latency_s": 12.01,
+      "tokens_in": 2110,
+      "tokens_out": 252,
+      "retrieved_context": "资料[1]（来源：会员权益.md，相似度 0.7066）\n## 积分规则\n积分自获得之日起一年内有效，过期自动清零。\n\n资料[2]（来源：会员权益.md，相似度 0.4858）\n## 会员等级规则\n等级有效期一年，次年重新累计。\n\n资料[3]（来源：会员权益.md，相似度 0.4694）\n## 积分规则\n积分可在积分商城兑换商品或下单抵现，100 积分抵 1 元。",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [
+        "一年",
+        "清零"
+      ],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答明确指出积分一年内有效、过期自动清零，完整覆盖\"一年\"\"清零\"两个关键要点，且补充了积分用途等合理信息，未答反、未缺失关键事实。",
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}
