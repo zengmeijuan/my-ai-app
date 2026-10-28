@@ -1,0 +1,46 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "chitchat": "1/1"
+  },
+  "latency_avg_s": 4.7,
+  "latency_p50_s": 4.7,
+  "latency_p95_s": 4.7,
+  "tokens_in": 406,
+  "tokens_out": 390,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step5",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-26T16:11:32",
+  "skipped": [],
+  "records": [
+    {
+      "id": "Z02",
+      "category": "chitchat",
+      "question": "你都能帮我做什么？",
+      "answer": "我是星辰商城的客服助手，主要能帮你做这几类事：\n\n**1. 查询商城政策（以知识库为准）**\n- 运费规则：包邮门槛、不同地区/商品运费\n- 退货与退款：七天无理由、退换货条件、退款时效\n- 会员权益：等级、折扣、专属服务\n- 积分规则：获取方式、抵扣、有效期\n\n**2. 帮你算钱**\n- 订单金额、运费、优惠后的实付金额、退款金额等，把算式列清楚给你看\n\n**3. 记录结论**\n- 重要结论我会在对话中记下来，方便后续追问时保持一致\n\n**需要说明的一点：** 我的回答只以知识库资料为准，知识库里没有的内容我会直接告诉你\"暂时查不到\"，不会自己编一个数字给你。涉及具体订单状态、物流单号这类实时信息，也需要你提供订单号或走人工客服核实。\n\n你可以直接把问题发给我，比如\"满多少包邮\"\"退货要几天内申请\"\"这件东西退货运费谁承担\"，我这就去查。",
+      "called_tools": [],
+      "expected_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 4.7,
+      "tokens_in": 406,
+      "tokens_out": 390,
+      "retrieved_context": "",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答切题且如实：清晰列举了可提供的服务（政策查询、算钱、记录结论），未编造具体政策细节，并主动说明知识库范围与实时信息的限制，符合期望要点。",
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}

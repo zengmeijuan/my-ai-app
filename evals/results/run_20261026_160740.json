@@ -1,0 +1,46 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "chitchat": "1/1"
+  },
+  "latency_avg_s": 1.73,
+  "latency_p50_s": 1.73,
+  "latency_p95_s": 1.73,
+  "tokens_in": 519,
+  "tokens_out": 82,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step1",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-26T16:07:40",
+  "skipped": [],
+  "records": [
+    {
+      "id": "Z01",
+      "category": "chitchat",
+      "question": "你好，你是谁呀？",
+      "answer": "你好呀！我是星辰商城的客服助手 😊\n\n我可以帮你解答关于**运费、退换货、退款、会员权益、积分**等商城政策问题，也可以帮你做金额相关的计算。\n\n有什么需要帮忙的吗？比如想了解退货运费怎么算、会员积分怎么用，随时问我就好～",
+      "called_tools": [],
+      "expected_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 1.73,
+      "tokens_in": 519,
+      "tokens_out": 82,
+      "retrieved_context": "",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答直接切题地介绍了自己的身份（商城客服助手），语气友好，列举的服务范围合理且未编造具体政策内容，符合常识判断标准。",
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}

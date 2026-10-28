@@ -1,0 +1,46 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "chitchat": "1/1"
+  },
+  "latency_avg_s": 4.35,
+  "latency_p50_s": 4.35,
+  "latency_p95_s": 4.35,
+  "tokens_in": 406,
+  "tokens_out": 452,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step5",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-26T16:08:39",
+  "skipped": [],
+  "records": [
+    {
+      "id": "Z02",
+      "category": "chitchat",
+      "question": "你都能帮我做什么？",
+      "answer": "您好，我是星辰商城的客服助手 😊 我可以帮您处理这些事情：\n\n**1. 政策咨询（按商城官方规则为您解答）**\n- 🚚 运费规则：包邮门槛、配送范围、运费怎么算\n- 🔄 退换货：可退条件、时限、流程、运费谁承担\n- 💰 退款：退款方式、到账时间、部分退款怎么处理\n- 👑 会员：等级、权益、升级条件\n- 🎁 积分：获取方式、怎么用、有效期\n\n**2. 金额测算**\n- 订单满减/包邮是否达标、退货后实际退款金额、运费差额等，我可以帮您算清楚。\n\n**3. 问题记录与跟进**\n- 把您的问题和诉求整理记录，方便后续同事跟进处理。\n\n**4. 其他**\n- 订单、物流、发票、优惠券使用等常见问题，也可以先问我。\n\n有两点想跟您说明一下：涉及具体政策条款和金额，我都会查商城的正式规则再回答您，不会凭印象说；如果知识库里没有的内容，我会如实告诉您，并帮您转人工或记录反馈。\n\n您现在有什么想咨询的？比如可以直接告诉我订单情况或想了解的政策，我马上帮您查 👌",
+      "called_tools": [],
+      "expected_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 4.35,
+      "tokens_in": 406,
+      "tokens_out": 452,
+      "retrieved_context": "",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答切题且结构清晰地列举了可提供的服务范围，未编造具体政策条款，并明确说明会查证官方规则、知识库外内容如实告知，符合如实、不编造、切题的要求。",
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}

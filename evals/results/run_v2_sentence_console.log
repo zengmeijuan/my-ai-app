@@ -1,0 +1,111 @@
+被测图: step1 | 用例: 25 条 (SKIP 0) | 注册工具: ['calculate', 'remember', 'search_knowledge'] | 温度: 0.0
+
+--- (1/25) R01 七天无理由退货的条件是什么？
+[R01] PASS | tools=2 | 11.12s
+
+--- (2/25) R02 钱多久能回来？
+[R02] PASS | tools=3 | 12.89s
+
+--- (3/25) R03 运费怎么算？
+[R03] PASS | tools=2 | 6.33s
+
+--- (4/25) R04 积分会过期吗？
+[R04] PASS | tools=2 | 6.85s
+
+--- (5/25) R05 信用卡分期手续费是多少？
+[R05] PASS | tools=4 | 9.62s
+
+--- (6/25) R06 账号被冻结了怎么解除？
+[R06] PASS | tools=3 | 9.64s
+
+--- (7/25) R07 买了一条裙子，可以七天无理由退货吗？
+[R07] PASS | tools=1 | 13.63s
+
+--- (8/25) R08 内衣可以七天无理由退货吗？
+[R08] PASS | tools=3 | 5.29s
+
+--- (9/25) R09 冰箱这种大件会送上门安装吗？
+[R09] PASS | tools=3 | 5.95s
+
+--- (10/25) R10 宇宙卡会员有什么专属权益？
+[R10] PASS | tools=5 | 13.04s
+
+--- (11/25) R11 电子发票什么时候发给我？
+[R11] PASS | tools=3 | 4.89s
+
+--- (12/25) R12 忘记密码怎么办？
+[R12] PASS | tools=3 | 7.18s
+
+--- (13/25) R13 星辰钱包里的钱可以提现吗？
+[R13] PASS | tools=3 | 8.22s
+
+--- (14/25) R14 注销账号之后，我的数据还会保留多久？
+[R14] PASS | tools=3 | 6.15s
+
+--- (15/25) R15 我用银行卡付款，退货退款几天能到账？
+[R15] PASS | tools=3 | 6.07s
+
+--- (16/25) T01 台灯 45 元，小风扇 39 元，两件一共多少钱？
+[T01] PASS | tools=2 | 8.03s
+
+--- (17/25) T02 我购物车里的商品一共 92 元，离包邮还差多少元？
+[T02] PASS | tools=3 | 9.7s
+
+--- (18/25) T03 我这个月消费了 1200 元，能获得多少积分？
+[T03] PASS | tools=4 | 9.93s
+
+--- (19/25) C01 顾客买了 45 元的台灯和 39 元的小风扇，用微信支付。请回答：① 这单收多少
+[C01] PASS | tools=5 | 8.97s
+
+--- (20/25) C02 满 99 元包邮，我购物车现在有 92 元的商品，再买多少钱的商品就能免运费？
+[C02] PASS | tools=3 | 6.05s
+
+--- (21/25) C03 我是宇宙卡会员，买一台 50 元的小台灯要收运费吗？
+[C03] PASS | tools=3 | 8.12s
+
+--- (22/25) X01 星辰商城可以到店自提吗？
+[X01] PASS | tools=3 | 12.56s
+
+--- (23/25) X02 你们支持花呗付款吗？
+[X02] PASS | tools=4 | 17.9s
+
+--- (24/25) Z01 你好，你是谁呀？
+[Z01] PASS | tools=0 | 1.42s
+
+--- (25/25) Z02 你都能帮我做什么？
+[Z02] PASS | tools=0 | 3.63s
+
+==============================================================
+评测汇总  被测图: step1
+用例: 25/25  正确率: 100.0%
+按类别: retrieval 15/15  tool 3/3  combo 3/3  refusal 2/2  chitchat 2/2
+延迟: 平均 8.53s | p50 8.03s | p95 13.63s
+Token: in 67826 / out 10875 | judge 调用: 5 次
+==============================================================
+[R01] PASS | kw    | tools=2 | 11.12s
+[R02] PASS | kw    | tools=3 | 12.89s
+[R03] PASS | kw    | tools=2 | 6.33s
+[R04] PASS | kw    | tools=2 | 6.85s
+[R05] PASS | kw    | tools=4 | 9.62s
+[R06] PASS | kw    | tools=3 | 9.64s
+[R07] PASS | kw    | tools=1 | 13.63s
+[R08] PASS | kw    | tools=3 | 5.29s
+[R09] PASS | kw    | tools=3 | 5.95s
+[R10] PASS | kw    | tools=5 | 13.04s
+[R11] PASS | kw    | tools=3 | 4.89s
+[R12] PASS | kw    | tools=3 | 7.18s
+[R13] PASS | kw    | tools=3 | 8.22s
+[R14] PASS | kw    | tools=3 | 6.15s
+[R15] PASS | kw    | tools=3 | 6.07s
+[T01] PASS | kw    | tools=2 | 8.03s
+[T02] PASS | kw    | tools=3 | 9.7s
+[T03] PASS | kw    | tools=4 | 9.93s
+[C01] PASS | judge | tools=5 | 8.97s
+[C02] PASS | kw    | tools=3 | 6.05s
+[C03] PASS | kw    | tools=3 | 8.12s
+[X01] PASS | judge | tools=3 | 12.56s
+[X02] PASS | judge | tools=4 | 17.9s
+[Z01] PASS | judge | tools=0 | 1.42s
+[Z02] PASS | judge | tools=0 | 3.63s
+
+结果已写入: E:\workspace\studying\ai\my-ai-app\evals\results\run_20261027_162655.json

@@ -1,0 +1,46 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "chitchat": "1/1"
+  },
+  "latency_avg_s": 1.58,
+  "latency_p50_s": 1.58,
+  "latency_p95_s": 1.58,
+  "tokens_in": 519,
+  "tokens_out": 74,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step1",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-27T09:22:18",
+  "skipped": [],
+  "records": [
+    {
+      "id": "Z01",
+      "category": "chitchat",
+      "question": "你好，你是谁呀？",
+      "answer": "你好！我是星辰商城的客服助手，很高兴为您服务 😊\n\n我可以帮您解答这些方面的问题：\n- **运费**规则与配送\n- **退换货**政策\n- **退款**流程与时效\n- **会员**等级与权益\n- **积分**获取与使用\n\n您有什么想了解的吗？直接告诉我就可以～",
+      "called_tools": [],
+      "expected_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 1.58,
+      "tokens_in": 519,
+      "tokens_out": 74,
+      "retrieved_context": "",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答直接、如实表明了客服助手身份，切题且未编造信息，并补充说明了可服务的范围，内容得体完整。",
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}

@@ -35,6 +35,7 @@ os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 import json
+import re
 import sys
 
 import numpy as np
@@ -69,11 +70,15 @@ def get_embed_model() -> TextEmbedding: # 注解：返回一个 TextEmbedding �
 # ============== 2. 离线管道：docs → 切块 → 向量化 → 存索引 ==============
 
 def load_chunks() -> list[dict]:
-    """读取 docs/ 下全部 .md，按空行切段落，一段 = 一个 chunk。
+    """读取 docs/ 下全部 .md，句级切分（C5 对照实验版 v2）。
 
-    切块（chunking）策略：段落级切分。每段自带小节标题（markdown 里标题
-    与正文之间不留空行），标题参与向量化，chunk 主题更明确、检索更准。
-    生产系统会用滑动窗口/递归分割等策略并考虑相邻 chunk 重叠，防答案被切断。
+    切块（chunking）策略 v2：先按空行分段（段首行是标题），再把段落正文
+    按中文句号切成句子，每句重复携带所属标题作为前缀——标题语义继续参与
+    向量化，且一个 chunk 只装一个知识点。
+    实验动机（v1 段落级的已证短板）：关键句埋在长段尾部被整段向量稀释，
+    组件级基线 R12（忘记密码）score 仅 0.38、R06 0.42——找回方式只是
+    「密码设置建议」段落的尾句。v1 基线存档：data/rag_index_paragraph_v1.json，
+    评测基线 evals/results/retrieval_20261027_154446.json。
     """
     chunks = []
     for fname in sorted(os.listdir(DOCS_DIR)):
@@ -83,8 +88,12 @@ def load_chunks() -> list[dict]:
             text = f.read()
         for para in text.split("\n\n"):
             para = para.strip()
-            if para:  # 跳过空段
-                chunks.append({"source": fname, "text": para})
+            if not para:
+                continue
+            head, _, body = para.partition("\n")  # 标题行 | 正文（本文档每段都是「标题+正文」结构）
+            sentences = [s.strip() for s in re.split(r"(?<=[。！？])", body) if s.strip()]
+            for s in sentences:
+                chunks.append({"source": fname, "text": f"{head}\n{s}"})
     return chunks
 
 

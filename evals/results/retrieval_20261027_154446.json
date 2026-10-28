@@ -1,0 +1,406 @@
+{
+  "total": 15,
+  "hit": 15,
+  "hit_rate": 100.0,
+  "rank_dist": {
+    "1": 15,
+    "2": 0,
+    "3": 0
+  },
+  "avg_best_rank": 1.0,
+  "latency_avg_s": 0.14,
+  "testcases_version": "v1",
+  "timestamp": "2026-10-27T15:44:46",
+  "records": [
+    {
+      "id": "R01",
+      "query": "七天无理由退货的条件是什么？",
+      "expected_sources": [
+        "退货政策.md"
+      ],
+      "top_k": [
+        {
+          "source": "退货政策.md",
+          "score": 0.5516
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.5406
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.3557
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.5516,
+      "latency_s": 1.73
+    },
+    {
+      "id": "R02",
+      "query": "钱多久能回来？",
+      "expected_sources": [
+        "退货政策.md"
+      ],
+      "top_k": [
+        {
+          "source": "退货政策.md",
+          "score": 0.5691
+        },
+        {
+          "source": "配送说明.md",
+          "score": 0.2808
+        },
+        {
+          "source": "会员权益.md",
+          "score": 0.2332
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.5691,
+      "latency_s": 0.03
+    },
+    {
+      "id": "R03",
+      "query": "运费怎么算？",
+      "expected_sources": [
+        "配送说明.md"
+      ],
+      "top_k": [
+        {
+          "source": "配送说明.md",
+          "score": 0.5419
+        },
+        {
+          "source": "会员权益.md",
+          "score": 0.3043
+        },
+        {
+          "source": "配送说明.md",
+          "score": 0.2863
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.5419,
+      "latency_s": 0.02
+    },
+    {
+      "id": "R04",
+      "query": "积分会过期吗？",
+      "expected_sources": [
+        "会员权益.md"
+      ],
+      "top_k": [
+        {
+          "source": "会员权益.md",
+          "score": 0.5517
+        },
+        {
+          "source": "会员权益.md",
+          "score": 0.3675
+        },
+        {
+          "source": "支付方式.md",
+          "score": 0.2935
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.5517,
+      "latency_s": 0.02
+    },
+    {
+      "id": "R05",
+      "query": "信用卡分期手续费是多少？",
+      "expected_sources": [
+        "支付方式.md"
+      ],
+      "top_k": [
+        {
+          "source": "支付方式.md",
+          "score": 0.4414
+        },
+        {
+          "source": "会员权益.md",
+          "score": 0.258
+        },
+        {
+          "source": "会员权益.md",
+          "score": 0.234
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.4414,
+      "latency_s": 0.02
+    },
+    {
+      "id": "R06",
+      "query": "账号被冻结了怎么解除？",
+      "expected_sources": [
+        "账号安全.md"
+      ],
+      "top_k": [
+        {
+          "source": "账号安全.md",
+          "score": 0.4199
+        },
+        {
+          "source": "账号安全.md",
+          "score": 0.3025
+        },
+        {
+          "source": "账号安全.md",
+          "score": 0.1888
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.4199,
+      "latency_s": 0.02
+    },
+    {
+      "id": "R07",
+      "query": "买了一条裙子，可以七天无理由退货吗？",
+      "expected_sources": [
+        "退货政策.md"
+      ],
+      "top_k": [
+        {
+          "source": "退货政策.md",
+          "score": 0.5921
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.5215
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.44
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.5921,
+      "latency_s": 0.03
+    },
+    {
+      "id": "R08",
+      "query": "内衣可以七天无理由退货吗？",
+      "expected_sources": [
+        "退货政策.md"
+      ],
+      "top_k": [
+        {
+          "source": "退货政策.md",
+          "score": 0.7194
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.5363
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.4126
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.7194,
+      "latency_s": 0.02
+    },
+    {
+      "id": "R09",
+      "query": "冰箱这种大件会送上门安装吗？",
+      "expected_sources": [
+        "配送说明.md"
+      ],
+      "top_k": [
+        {
+          "source": "配送说明.md",
+          "score": 0.5769
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.293
+        },
+        {
+          "source": "配送说明.md",
+          "score": 0.2664
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.5769,
+      "latency_s": 0.03
+    },
+    {
+      "id": "R10",
+      "query": "宇宙卡会员有什么专属权益？",
+      "expected_sources": [
+        "会员权益.md"
+      ],
+      "top_k": [
+        {
+          "source": "会员权益.md",
+          "score": 0.7401
+        },
+        {
+          "source": "会员权益.md",
+          "score": 0.713
+        },
+        {
+          "source": "会员权益.md",
+          "score": 0.6742
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.7401,
+      "latency_s": 0.03
+    },
+    {
+      "id": "R11",
+      "query": "电子发票什么时候发给我？",
+      "expected_sources": [
+        "支付方式.md"
+      ],
+      "top_k": [
+        {
+          "source": "支付方式.md",
+          "score": 0.5725
+        },
+        {
+          "source": "配送说明.md",
+          "score": 0.3115
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.2785
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.5725,
+      "latency_s": 0.04
+    },
+    {
+      "id": "R12",
+      "query": "忘记密码怎么办？",
+      "expected_sources": [
+        "账号安全.md"
+      ],
+      "top_k": [
+        {
+          "source": "账号安全.md",
+          "score": 0.3795
+        },
+        {
+          "source": "账号安全.md",
+          "score": 0.3041
+        },
+        {
+          "source": "账号安全.md",
+          "score": 0.2778
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.3795,
+      "latency_s": 0.02
+    },
+    {
+      "id": "R13",
+      "query": "星辰钱包里的钱可以提现吗？",
+      "expected_sources": [
+        "支付方式.md"
+      ],
+      "top_k": [
+        {
+          "source": "支付方式.md",
+          "score": 0.5374
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.4283
+        },
+        {
+          "source": "支付方式.md",
+          "score": 0.4061
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.5374,
+      "latency_s": 0.02
+    },
+    {
+      "id": "R14",
+      "query": "注销账号之后，我的数据还会保留多久？",
+      "expected_sources": [
+        "账号安全.md"
+      ],
+      "top_k": [
+        {
+          "source": "账号安全.md",
+          "score": 0.4326
+        },
+        {
+          "source": "账号安全.md",
+          "score": 0.2972
+        },
+        {
+          "source": "账号安全.md",
+          "score": 0.2409
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.4326,
+      "latency_s": 0.04
+    },
+    {
+      "id": "R15",
+      "query": "我用银行卡付款，退货退款几天能到账？",
+      "expected_sources": [
+        "退货政策.md"
+      ],
+      "top_k": [
+        {
+          "source": "退货政策.md",
+          "score": 0.4697
+        },
+        {
+          "source": "配送说明.md",
+          "score": 0.3542
+        },
+        {
+          "source": "退货政策.md",
+          "score": 0.2573
+        }
+      ],
+      "hit": true,
+      "missing_sources": [],
+      "best_rank": 1,
+      "best_score": 0.4697,
+      "latency_s": 0.03
+    }
+  ]
+}

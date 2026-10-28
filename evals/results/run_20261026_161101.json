@@ -1,0 +1,46 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "chitchat": "1/1"
+  },
+  "latency_avg_s": 4.57,
+  "latency_p50_s": 4.57,
+  "latency_p95_s": 4.57,
+  "tokens_in": 406,
+  "tokens_out": 374,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step5",
+  "testcases_version": "v1",
+  "timestamp": "2026-10-26T16:11:01",
+  "skipped": [],
+  "records": [
+    {
+      "id": "Z02",
+      "category": "chitchat",
+      "question": "你都能帮我做什么？",
+      "answer": "我是星辰商城的客服助手，主要能帮你处理这些事：\n\n**1. 政策规则查询**（以知识库资料为准）\n- 运费规则：包邮门槛、偏远地区配送、运费计算\n- 退换货：七天无理由、退货条件、退款时效和流程\n- 会员权益：等级、折扣、专享服务\n- 积分规则：获取方式、抵扣比例、有效期\n\n**2. 订单相关问题**：根据订单金额帮你算清运费、退款金额、积分抵扣等具体数字。\n\n**3. 售前咨询**：商品配送范围、下单注意事项等。\n\n**需要说明的几点：**\n- 所有政策条款我都会查知识库后再回答，不会凭空编造；知识库里没有的内容，我会直接告诉你「暂无资料」，并建议你联系人工客服核实。\n- 我这里查不到你的个人订单信息，涉及具体订单状态、物流单号、账户余额这类，需要你提供订单号或转人工处理。\n\n你想了解哪方面？直接把问题发我就行，比如「满多少包邮」「退货要多久到账」「积分怎么算」。",
+      "called_tools": [],
+      "expected_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 4.57,
+      "tokens_in": 406,
+      "tokens_out": 374,
+      "retrieved_context": "",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答切题且结构清晰，如实列举了政策查询、订单计算、售前咨询等能力，明确说明以知识库为准、不编造并坦承无法查询个人订单等限制，无虚构政策或答非所问。",
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}
