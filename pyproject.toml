@@ -33,3 +33,8 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 # 包目录已从 my_ai_app 改名为 my_agent（与项目名 my-ai-app 的规范化结果不再一致，需显式指定）
 module-name = "my_agent"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]

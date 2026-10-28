@@ -1,0 +1,50 @@
+{
+  "total": 1,
+  "pass": 1,
+  "accuracy": 100.0,
+  "by_category": {
+    "chitchat": "1/1"
+  },
+  "latency_avg_s": 1.83,
+  "latency_p50_s": 1.83,
+  "latency_p95_s": 1.83,
+  "tokens_in": 519,
+  "tokens_out": 101,
+  "cost_usd": null,
+  "judge_calls": 1,
+  "judge_tokens_in": 0,
+  "judge_tokens_out": 0,
+  "errors": 0,
+  "failures_by_class": {},
+  "graph": "step1",
+  "testcases_version": "v2",
+  "timestamp": "2026-10-28T10:12:03",
+  "skipped": [],
+  "records": [
+    {
+      "id": "Z01",
+      "category": "chitchat",
+      "question": "你好，你是谁呀？",
+      "answer": "你好呀！我是星辰商城的客服助手 😊\n\n很高兴为你服务～ 关于购物、运费、退换货、会员积分这些方面的问题，我都可以帮你查询和解答。\n\n请问有什么可以帮到你的吗？",
+      "called_tools": [],
+      "expected_tools": [],
+      "n_tool_calls": 0,
+      "latency_s": 1.83,
+      "tokens_in": 519,
+      "tokens_out": 101,
+      "retrieved_context": "",
+      "error": "",
+      "answer_ok": true,
+      "behavior_ok": true,
+      "points_hit": [],
+      "points_missed": [],
+      "judge_used": true,
+      "judge_reason": "回答如实自我介绍为星辰商城客服助手，切题、未编造政策、未调用工具，符合判定口径。",
+      "judge_tokens_in": 0,
+      "judge_tokens_out": 0,
+      "pass": true,
+      "failure_class": "",
+      "failure_reason": ""
+    }
+  ]
+}
