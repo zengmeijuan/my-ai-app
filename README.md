@@ -1,6 +1,6 @@
 # my-ai-app 学习路线（求职版）
 
-从零手写 agent 到转岗 agent 应用开发的实战项目。路线对标 [Agent-Learning-Hub](https://github.com/) 的 Learning Todo List，当前进度：里程碑 A、B、B2 已完成（A-3 跳过，改在 B2 用 LangChain @tool 实现），当前进入里程碑 C。
+从零手写 agent 到转岗 agent 应用开发的实战项目。路线对标 [Agent-Learning-Hub](https://github.com/) 的 Learning Todo List，当前进度：里程碑 A、B、B2、C、D 已完成（A-3 跳过，改在 B2 用 LangChain @tool 实现），当前进入里程碑 E。
 
 ## 已有资产
 
@@ -72,11 +72,11 @@
 
 核心步骤：
 
-- [ ] 理清三者区别：tool 是可调用接口，skill 是可复用流程知识，prompt 是一次性指令
-- [ ] 用 FastMCP 把 search_knowledge（或 grep）包装成 MCP server
-- [ ] 在 Claude Code 里接入自建 MCP server 并实际调用 → 验证：Claude Code 能查到星辰商城知识库
-- [ ] 写一个最小 SKILL.md：name、何时使用、步骤、验收标准
-- [ ] 了解 A2A / ACP 协议定位（agent 互连 / 宿主接入），概念层面能答即可，不实现
+- [x] 理清三者区别：tool 是可调用接口，skill 是可复用流程知识，prompt 是一次性指令 → 验证：D1 三原语实物报文 + 六词对比（笔记 §1-§4）
+- [x] 用 FastMCP 把 search_knowledge（或 grep）包装成 MCP server → 验证：02_raw_client 手写 JSON-RPC 裸报文走通 initialize / tools/list / tools/call 三步（D2）
+- [x] 在 Claude Code 里接入自建 MCP server 并实际调用 → 验证：accr 会话 /mcp ✔ connected · 2 tools，「七天无理由退货」自主调 search_knowledge 基于知识库作答（D3）；延伸 D3a 自建 agent 接 MCP（04_sdk_agent）、D3b 部署 HTTP 服务与远程接入（05_http_client + uvx 社区工具）
+- [x] 写一个最小 SKILL.md：name、何时使用、步骤、验收标准 → 验证：.claude/skills/eval-regression 固化评测回归流程，T01 单条实跑与说明书一致（D4）
+- [x] 了解 A2A / ACP 协议定位（agent 互连 / 宿主接入），概念层面能答即可，不实现 → 验证：笔记 D5 三协议对比 + 自检四问（A2A 入 AAIF 与 ACP 收敛为 2026 查证结论）
 
 ## 里程碑 E：多 agent 压缩版
 
