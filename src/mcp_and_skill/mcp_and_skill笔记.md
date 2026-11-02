@@ -805,3 +805,43 @@ agent。本项目反例：step5 的 judge_llm、eval.py 的归因分析员——
 进程内多 agent 在里程碑 E 实战（LangGraph supervisor 模式，research → write →
 review → revise 三角色，明确职责边界/输入输出 schema/停止条件）；A2A / ACP 按路线
 设定概念层能答即可，不实现。
+
+## 附：MCP 本体收拢——是什么、三组关系、调用链
+
+### 1. MCP 是什么
+
+**一句话**：MCP 是 AI 应用（宿主）与外部工具/数据之间的开放标准协议——**统一的连接标准，作用是工具实现一次即可被所有支持 MCP 的宿主即插即用地接入（M×N → M+N）**。
+
+- **本体是一份规范**：规定怎么通信——JSON-RPC 2.0 消息形态、stdio / streamable-http 传输、initialize 握手生命周期、三原语方法清单（tools/list、tools/call...）。
+- **协议两端**：规范规定了通信双方的角色——**MCP client**（AI应用内嵌的协议通信模块：发起连接、发现能力、转发调用）与 **MCP server**（独立运行的进程/服务：暴露三原语、按协议响应请求）。
+- **双向协议**：server 还能反向请求宿主侧——sampling（借宿主的 LLM 推理）、elicitation（向用户要输入）；这两个反向方法不进三原语容器表，但证明 MCP ≠ 单向工具集。
+
+### 2. 三组关系
+
+**MCP ↔ 工具**：工具是通过协议暴露的能力之一（tools 原语），不是协议本身——协议定义能力的发现与调用规范（`tools/list`、`tools/call`），工具是 server 依据该规范注册并对外提供的具体能力。
+
+**MCP ↔ MCP server**：规范与实现方的关系——MCP 是协议规范，server 是该规范的服务端实现。协议规定通信规则（消息形态、传输方式、生命周期、方法名）；架构两端各自实现协议的一半：宿主内嵌 **client**（发起连接、发现能力、转发调用），工具提供方运行 **server**（暴露三原语、执行请求）。规范允许无数独立实现：FastMCP 是 MCP 协议的实现框架，各实现只要遵循同一规范即相互兼容——任何 client 可连接任何 server（D3 已验证：换宿主一字不改）。
+
+**MCP ↔ 函数**：函数不感知协议——实现协议的主体是 **server 进程**，函数是被 server 包装注册后经协议暴露的内容；包装后其身份是该 server 暴露的**一个 tool**，而非 server 本身。对照 D2：MCP server 只是协议适配层，工具实现直接 import 业务代码。
+
+### 3. 调用链（加固）
+
+```
+AI 应用（宿主）→ 内嵌 MCP client --JSON-RPC: tools/call--> MCP server → 执行函数
+                                <--JSON-RPC: result (content[])----------
+```
+
+钉死三点：
+
+1. AI 应用从不"直接调函数"——请求发给 server，server 执行本地函数，结果按协议回来；
+2. 模型视角毫无变化——看到的是 schema、产出的是 tool_calls，MCP 让跨进程工具与本地函数调用形式一致；
+3. 函数包装前后是同一个普通函数——身份是 server 的 tool，server 是包装它的程序。
+
+**最终版表述（背这个）**：
+
+> MCP 是 AI 应用和工具/数据之间的标准化协议。普通函数被一个实现了 MCP 协议的
+> server 程序包装后，成为该 server 暴露的一个 MCP 工具；任何支持 MCP 的 AI 应用
+> 都可以连接这个 server，发现并调用这个工具。
+
+**记忆锚点**：函数成为的是 **tool**，**server** 是那个包装函数的程序。
+
