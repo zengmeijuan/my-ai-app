@@ -1,6 +1,6 @@
 # my-ai-app 学习路线（求职版）
 
-从零手写 agent 到转岗 agent 应用开发的实战项目。路线对标 [Agent-Learning-Hub](https://github.com/) 的 Learning Todo List，当前进度：里程碑 A、B、B2、C、D 已完成（A-3 跳过，改在 B2 用 LangChain @tool 实现），当前进入里程碑 E。
+从零手写 agent 到转岗 agent 应用开发的实战项目。路线对标 [Agent-Learning-Hub](https://github.com/) 的 Learning Todo List，当前进度：里程碑 A、B、B2、C、D、E 已完成（A-3 跳过，改在 B2 用 LangChain @tool 实现），当前进入里程碑 G。
 
 ## 已有资产
 
@@ -81,14 +81,16 @@
 ## 里程碑 E：多 agent 压缩版
 
 原则：做小不做大，一个三角色系统足以理解协调问题，不碰 CrewAI 类模板化框架。
+场景（E1 调整）：深度研究——多 agent 三条件（可并行 / 上下文可切分 / 结果易验证）全中的任务；
+原写文章流水线路径可穷举，保留为固定工作流基线对照（step0）。
 
 核心步骤：
 
-- [ ] 用 LangGraph 的 supervisor 模式搭 research → write → review → revise 小系统
-- [ ] 复用 web_search / web_fetch 工具
-- [ ] 明确每个 agent 的职责边界、输入输出 schema、停止条件
-- [ ] 实际处理至少一种问题：循环、任务漂移、上下文膨胀，记录处理过程
-- [ ] 得出自己的结论：这个任务什么时候单 agent 反而更好
+- [x] 用 LangGraph 的 supervisor 模式搭 research → write → review → revise 小系统 → 验证：step1_supervisor.py 最小动态深度研究，三角色三节点（supervisor / researcher / synthesizer），supervisor 三次内容函数路由（拆题 / 判材料 / 终审，directive 随内容变），实跑一次通过；step0_fixed_workflow.py 固定工作流基线对照（路由为字段函数，if/else 可替代 supervisor 的实证）
+- [x] 复用 web_search / web_fetch 工具（researcher agent 化：ReAct 循环 + 联网工具，系统出现第 1 个 agent）→ 验证：step2_research_tools.py，researcher 升级为 ReAct 子图（@tool 薄包装 + bind_tools + ToolNode，MAX_TOOL_CALLS=10 预算熔断 → finalize 结构收尾），supervisor / synthesizer 零改动；实跑两轮各调满 10 次工具，材料带实时来源 URL，supervisor 据材料缺口定向补查（第 2 轮自主改用 GitHub API 取 stars / 发版数据），2/2 轮熔断后带局限收尾
+- [x] 明确每个 agent 的职责边界、输入输出 schema、停止条件（含 Send API 并行多 researcher 实例，agent 实例数 ≥2 达标 multi-agent）→ 验证：step3_contracts.py，契约三要素集中定义一屏内（职责 / 输入输出 schema / 停止条件）；Send fan-out 并行 2 实例（维度工单自包含，research 累加 reducer 合并）；轮次熔断代码层固化（LLM 决策返回后代码检查封顶）；实跑 2 批 3 份材料，补查实例纠正材料 1 的 CrewAI Flows 错误描述（交叉验证价值实证）
+- [x] 实际处理至少一种问题：循环、任务漂移、上下文膨胀，记录处理过程 → 验证：step4_failure_lab.py 循环故障实验——故障注入把概率故障变确定性故障，单一变量对照：无打回熔断 → 13 次打回循环耗尽 recursion_limit 抛 GraphRecursionError（兜底被触发 = 业务熔断设计缺口）；--fixed 加打回熔断 → 2 次打回后代码强制 END，答案保留带保留意见收尾（优雅降级）；完整走通"现象 → 根因 → 机制修复 → 对照验证"
+- [x] 得出自己的结论：这个任务什么时候单 agent 反而更好 → 验证：step5_single_vs_multi.py 同题公平对照（同一副工具、同一预算 10，差异只在编排）——单 agent 71.3s 产出合格答案 vs 多 agent 493.5s（6.9 倍）换一手数据与交叉验证纠偏；结论：单一检索线 / 材料一个上下文装得下 / 验证一眼可判的任务三条件不中，单 agent 够用；编排税买证据深度与纠偏能力，E1 三条件全中才上 multi-agent
 
 产出：一个小型多 agent 系统。
 
