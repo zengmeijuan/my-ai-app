@@ -1,6 +1,6 @@
 # my-ai-app 学习路线（求职版）
 
-从零手写 agent 到转岗 agent 应用开发的实战项目。路线对标 [Agent-Learning-Hub](https://github.com/) 的 Learning Todo List，当前进度：里程碑 A、B、B2、C、D、E 已完成（A-3 跳过，改在 B2 用 LangChain @tool 实现），当前进入里程碑 G。
+从零手写 agent 到转岗 agent 应用开发的实战项目。路线对标 [Agent-Learning-Hub](https://github.com/) 的 Learning Todo List，当前进度：里程碑 A、B、B2、C、D、E、G 已完成（A-3 跳过，改在 B2 用 LangChain @tool 实现；F 为可选支线未启动）。
 
 ## 已有资产
 
@@ -104,14 +104,23 @@
 
 核心步骤：
 
-- [ ] read_file 加路径白名单（现在可读任意路径，是越权风险）
-- [ ] calculate 的 eval 换成基于 ast 的白名单解析（现在的空 builtins 沙箱可用 __class__ 链绕过）
-- [ ] 危险工具加人工确认机制，加成本 / 步数上限
-- [ ] prompt injection 防线：往知识库塞一条「忽略以上指令…」类注入用例，验证 agent 不执行 → 验证：注入测试不生效
-- [ ] FastAPI 服务化或 CLI 打包，确定一种部署形态
-- [ ] README 收尾：运行方式、key 配置、如何扩展工具、已知限制
+- [x] read_file 加路径白名单（现在可读任意路径，是越权风险）→ 验证：check_path 两步（realpath 规范化 + os.sep 目录级前缀 + normcase 大小写），`../`、UNC、同级前缀、大小写混淆全拦，区内行为零改动（step1 + step0 全绿）
+- [x] calculate 的 eval 换成基于 ast 的白名单解析（现在的空 builtins 沙箱可用 __class__ 链绕过）→ 验证：白名单即解释器能力集，属性链逃逸在求值步截断；行为对齐坑（前导空白）修复，浮点行为与旧 eval 逐字一致（step2）
+- [x] 危险工具加人工确认机制，加成本 / 步数上限 → 验证：CONFIRM_TOOLS + 默认拒绝（EOF→拒绝为服务化预留）+ Budget 估算熔断；gate 在 loop 执行点而非工具层，直接调工具不受影响（step3）
+- [x] prompt injection 防线：往知识库塞一条「忽略以上指令…」类注入用例，验证 agent 不执行 → 验证：wrap_untrusted 随机 nonce 数据边界 + system 声明段，伪造闭合与重放攻击失效；真机直白注入模型自行识破（step4）
+- [x] FastAPI 服务化或 CLI 打包，确定一种部署形态 → 验证：FastAPI 服务化——POST /chat + GET /health，会话按 session_id 分格（独立 messages + Budget），echo 双输出去向；服务无终端 → EOF 默认拒绝自动生效（G3 预埋分支零改动验收）；TestClient（step5）+ httpx 真网络客户端（step5b）双验收物
+- [x] README 收尾：运行方式、key 配置、如何扩展工具、已知限制 → 验证：下方「运行方式」节 + 笔记 G0-G5 章节与延伸沉淀（G6）
 
-产出：可部署、有权限边界、有 README 的完整项目。
+产出：可部署、有权限边界、有 README 的完整项目——五层结构 + 五道防线 + 服务化双入口，验收物 step0-step5b，细节见 src/security_serve/安全加固与服务化笔记.md。
+
+### 运行方式（G 阶段成果）
+
+- 环境：Python ≥ 3.13 + uv。克隆后 `uv sync` 装依赖；项目根建 `.env`，填 openai 兼容接口的 BASE_URL / API_KEY / MODEL。
+- CLI 对话（bash）：`PYTHONPATH=src uv run python -m security_serve.agent.cli`；PowerShell 先 `$env:PYTHONPATH="src"` 再去掉前缀跑。
+- HTTP 服务：`uv run uvicorn security_serve.agent.server:app --app-dir src --port 8000`（`--app-dir` 跨 shell 通用）；浏览器开 `http://127.0.0.1:8000/docs` 交互调试；真网络客户端示例 `uv run python src/security_serve/step5b_http_client.py`（服务需先启动）。
+- 验收物：`uv run python src/security_serve/step0_refactor_check.py` 起 step0-step5b 逐个跑（step3 用管道喂 y/n；step4 可加 `--live`；step5/step5b 需 .env 真实 key）。
+- 扩展工具：tools.py 写函数 + 挂 `@tool` 装饰器（一处注册同时生成实现与 schema）；危险工具名加进 config.CONFIRM_TOOLS；路径类工具自动过 G1 闸门、返回值自动过 G4 封装。
+- 已知限制：会话存进程内存（重启即失、多副本不共享，生产换 Redis）；全局锁串行化（吞吐换正确）；Budget 按字符折算 token（估算护栏，中文偏少记）；无认证（默认只绑 127.0.0.1 限本机，公开前需补认证 / 限流 / HTTPS，见笔记 G5 §8）。
 
 ---
 
