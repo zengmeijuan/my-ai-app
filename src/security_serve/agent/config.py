@@ -96,6 +96,14 @@ SESSION_PATH = _DATA_DIR / "session.json"
 # 启动时由 build_system_prompt() 全文注入 system prompt
 MEMORY_PATH = _DATA_DIR / "memory.md"
 
+# ============== H1 数据库只读工具常量 ==============
+
+# 示例业务库路径（db_seed.build 幂等重建）。生产形态 = 真实库 + 只读账号连接，
+# 学习版用 SQLite URI 只读模式（mode=ro）映射"只读账号"——写不进去由数据库内核保证
+DB_PATH = _DATA_DIR / "shop.db"
+DB_MAX_ROWS = 20        # 查询结果行数上限：工具自带边界，防单次结果撑爆上下文（与 MAX_MATCHES 同思路）
+DB_MAX_CELL_CHARS = 60  # 单元格截断长度：超长字段截断加省略号提示
+
 
 # system prompt 基础部分：clear 重置对话时要保留它（里面有工作目录锚点）
 SYSTEM_PROMPT_BASE = f"""
@@ -112,7 +120,8 @@ SYSTEM_PROMPT_BASE = f"""
 2. 知识库没找到 / 用户要查时效性/外部/公开信息 → 用 web_search 找 URL，再 web_fetch 读正文
 3. 涉及当前项目的代码/文件 → 用 read_file / grep / list_dir
 4. 计算用 calculate，天气用 get_weather，重要结论用 remember
-5. 所有工具都无结果时，如实告知「找不到」，**禁止编造**
+5. 查业务数据（订单/会员/商品的统计与明细）→ 先 db_schema() 看有哪些表，db_schema(表名) 看字段，再 db_query 执行 SELECT 查询（数据库只读，写请求会被拒绝，需向用户说明只能人工在数据库端操作）
+6. 所有工具都无结果时，如实告知「找不到」，**禁止编造**
 
 # 引用规范
 

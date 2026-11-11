@@ -1,4 +1,4 @@
-"""tools.py —— 工具注册表 + 9 个工具实现。
+"""tools.py —— 工具注册表 + 11 个工具实现。
 
 一处注册同时产出实现与 schema（补上 A-3 跳过的注册表重构：旧版 TOOL_FUNCTIONS
 与 TOOLS 两处手工维护容易漂移）。加新工具只改一处：写实现 + 挂 @tool 注册。
@@ -6,6 +6,7 @@
 import json
 import os
 import re
+import sqlite3
 from datetime import datetime
 
 import httpx
@@ -15,6 +16,9 @@ from my_agent import rag
 
 from security_serve.agent.config import (
     BROWSER_USER_AGENT,
+    DB_MAX_CELL_CHARS,
+    DB_MAX_ROWS,
+    DB_PATH,
     FETCH_MAX_CHARS,
     FETCH_TIMEOUT,
     MAX_GREP_FILE_BYTES,
@@ -262,6 +266,132 @@ def remember(content: str) -> str:
     with open(MEMORY_PATH, "a", encoding="utf-8") as f:
         f.write(line + "\n")
     return f"已写入长期记忆（下次会话或 clear 后注入 system prompt）：{content.strip()}"
+
+
+# ============== H1：数据库只读工具 ==============
+# 生产形态 = 真实业务库 + 只读账号连接；学习版映射：SQLite URI 只读模式（mode=ro）
+# 即"只读账号"——写不进去由数据库内核保证。只读双防线：
+#   第一道 _check_readonly 白名单预检（对应 G2：白名单即能力集，只认好词不枚举坏词），
+#   给模型友好错误串供其自行调整；
+#   第二道 mode=ro 连接（对应 G1：闸门在连接层），预检被绕过时硬兜底。
+# 拒绝语义同 G3：错误串当工具结果回传，循环不断，模型看到原因向用户解释。
+
+_READONLY_FIRST_WORDS = ("SELECT", "WITH")
+# WITH 放行的边界：CTE 查询（WITH ... SELECT）是合法读库形态；但 SQLite 也允许
+# WITH 后跟写语句（WITH t AS (...) DELETE FROM ...）——这类输入预检层放行，由
+# mode=ro 连接在内核层硬拦（纵深防御分工，step6 [5] 有实证）。预检管友好拒绝，
+# 连接层是安全底线，两者覆盖面不等同。
+
+
+def _open_readonly() -> sqlite3.Connection:
+    """只读连接：mode=ro 下任何写语句（含 PRAGMA 写配置、ATTACH 外挂库）都被
+    SQLite 内核拒绝（attempt to write a readonly database）——不靠 prompt 自觉。"""
+    # sqlite3.connect(path) 默认读写可创建
+    # connect("file:...?mode=ro", uri=True) ：SQLite 的 URI 语法，mode=ro = read only，返回只读链接，无法写入数据
+    return sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+
+
+def _check_readonly(sql: str) -> str | None:
+    """白名单预检：放行返回 None，拒绝返回原因串。
+
+    先剥注释再取首词——"/*x*/ DELETE FROM ..." 这类把写语句藏在注释后的输入
+    会在剥注释后现出原形。中间分号 = 多语句（一次一条，execute 也只执行单条）。
+    误报从宽（如字符串常量里含分号会被拦）：预检层宁误拒不误放，硬兜底在 ro 层。
+    """
+    # 把行注释和块注释统一替换成空格再去首尾空白
+    no_comment = re.sub(r"--[^\n]*|/\*.*?\*/", " ", sql, flags=re.S).strip()
+    # 取 SQL 剥注释后的"首词"，统一大写，空串兜底
+    first = no_comment.split(None, 1)[0].upper() if no_comment else ""
+    # 不在白名单返回拒绝串、在则查中间分号（多语句）、都干净返回None
+    if first not in _READONLY_FIRST_WORDS:
+        return (
+            f"拒绝：本工具只允许只读查询（SELECT 或 WITH 开头），收到的是 {first or '空'} 语句。"
+            f"数据库连接为只读，即使执行也无法写入；如需修改数据请告知用户由人工在数据库端操作"
+        )
+    if ";" in no_comment.rstrip(";"):
+        return "拒绝：一次只能执行一条语句（检测到中间分号），请拆成多次查询"
+    return None
+
+
+@tool(
+    "db_schema",
+    "查看星辰商城业务数据库的结构。两步用法：先不带参数调用看有哪些表，再传表名看该表的字段定义和行数。写 SQL 前先看结构，避免猜字段名。",
+    required=(),
+    table={"type": "string", "description": "表名，如 orders。留空则返回表清单"},
+)
+def db_schema(table: str = "") -> str:
+    """不带参数返回表清单；带表名返回 CREATE 语句（字段定义）+ 约行数。
+
+    边界：表名参数同样来自模型（不可信输入），用参数化查询 sqlite_master 验证
+    存在性后才拼接计数 SQL——"先验证再使用"，与 G1 路径校验同源。
+    """
+    # 每次调用新开连接、用完就关，不开全局常驻连接
+    conn = _open_readonly()
+    try:
+        # 不带参数，列出所有表
+        if not table:
+            rows = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            ).fetchall()
+            names = "、".join(r[0] for r in rows)
+            return f"数据库共 {len(rows)} 张表：{names}。用 db_schema(表名) 查看具体字段"
+        # 带表名，先验证再使用
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        if not row:
+            return f"错误：表 {table!r} 不存在。先用 db_schema()（不带参数）查看有哪些表"
+        count = conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
+        return f"{row[0]}\n（约 {count} 行）"
+    except sqlite3.Error as e:
+        return f"错误：查询结构失败: {e}"
+    finally:
+        conn.close()
+
+
+@tool(
+    "db_query",
+    "对星辰商城业务数据库执行只读 SQL 查询（仅 SELECT / WITH 开头），返回表格文本。查订单/会员/商品的统计与明细时调用。先 db_schema 看表结构再写 SQL。数据库只读：INSERT/UPDATE/DELETE/DROP 等写操作会被拒绝。",
+    required=("sql",),
+    sql={"type": "string", "description": "一条完整的 SELECT 语句，如 SELECT level, COUNT(*) FROM users GROUP BY level"},
+)
+def db_query(sql: str) -> str:
+    """执行只读 SQL，返回 markdown 风格表格文本（行数/单元格宽度有上限）。
+
+    边界：白名单预检 + mode=ro 连接双防线（见模块注释）；fetchmany 取
+    DB_MAX_ROWS+1 行，多出的 1 行只用来判断"还有更多"，提示模型加 LIMIT。
+    """
+    reason = _check_readonly(sql)
+    if reason:
+        return reason
+    try:
+        conn = _open_readonly()
+        try:
+            # execute() 把 SQL 发给 SQLite 执行，返回 cursor（游标），可以理解为结果集的读取手柄
+            cur = conn.execute(sql)
+            # fetch 从已执行的结果集里取行，fetchmany(n)：最多取 n 行
+            rows = cur.fetchmany(DB_MAX_ROWS + 1)
+            cols = [d[0] for d in cur.description] if cur.description else []
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        return f"SQL 执行出错: {e}（可先 db_schema 查看表结构，检查字段名与表名）"
+
+    if not rows:
+        return "查询结果为空（0 行）。可换个条件或先用 db_schema 确认字段"
+    truncated = len(rows) > DB_MAX_ROWS
+    rows = rows[:DB_MAX_ROWS]
+
+    def cell(v) -> str:
+        s = "NULL" if v is None else str(v)
+        return s if len(s) <= DB_MAX_CELL_CHARS else s[:DB_MAX_CELL_CHARS] + "…"
+
+    # 表头
+    table = " | ".join(cols) + "\n"
+    # 每行数据
+    table += "\n".join(" | ".join(cell(v) for v in row) for row in rows)
+    footer = f"\n（显示 {len(rows)} 行" + ("，结果未完，请在 SQL 里加 LIMIT 缩小范围）" if truncated else "）")
+    return table + footer
 
 
 # ============== 联网工具：web_search + web_fetch ==============
