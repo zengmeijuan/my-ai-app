@@ -1,0 +1,13 @@
+# docker-compose.yml —— H2 服务清单：当前只有 app 一行；H4 学 Redis、H6 学向量库时往这里加行
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"      # 宿主机 8000 → 容器 8000：端口映射让外部可达容器内的服务
+    env_file: .env       # .env 被.dockerignore挡在镜像外，运行时从这里注入环境变量（密钥不进镜像）
+    healthcheck:         # 容器级存活探针：G5 /health 的容器化对应物，也是 K8s 探针的前身
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -1,0 +1,16 @@
+# .dockerignore —— build 上下文瘦身 + 敏感文件不进镜像（和.gitignore同语法，gitignore管什么不进版本库；.dockerignore管什么不进镜像）
+# .env 是密钥：镜像会被分发/推送仓库，进了等于把 key 发出去（.gitignore 同纪律，场景换成镜像分发）
+.git
+.venv
+.idea
+.vscode
+__pycache__
+**/__pycache__
+*.py[oc]
+.env
+.env.local
+rag_index.json
+# 运行时数据不进镜像：session / memory 是运行状态，shop.db 由容器启动时自动重建（无状态容器）
+**/data/
+docs/
+evals/
