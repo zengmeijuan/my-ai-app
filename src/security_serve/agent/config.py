@@ -105,6 +105,24 @@ DB_MAX_ROWS = 20        # 查询结果行数上限：工具自带边界，防单
 DB_MAX_CELL_CHARS = 60  # 单元格截断长度：超长字段截断加省略号提示
 
 
+# ============== H3 代码执行沙箱常量 ==============
+
+# 沙箱执行 python:3.13-slim 一次性容器（--rm 用完即焚）。五道围栏全用 docker 原生参数，
+# 零自研：
+#   1) --network none   断网：容器内代码碰不到外网和宿主内网
+#   2) 不挂载不传 -e    文件系统是纯净底座（无业务代码/无密钥），环境变量一个不带
+#   3) --memory 128m    内存上限：内存炸弹被内核 OOM 杀掉（退出码 137）
+#   4) --cpus 0.5       CPU 半核：烧 CPU 的代码也快不起来
+#   5) --pids-limit 64  进程数上限：fork 炸弹因无法创建新进程而报错终止
+SANDBOX_IMAGE = "python:3.13-slim"
+SANDBOX_TIMEOUT = 10       # 容器内 timeout 命令的秒数：超时代码被精确终止（退出码 124）
+SANDBOX_MEMORY = "128m"    # 内存围栏
+SANDBOX_CPUS = "0.5"       # CPU 围栏
+SANDBOX_PIDS_LIMIT = 64    # 进程数围栏
+SANDBOX_MAX_CODE_CHARS = 20_000    # 模型提交的代码长度上限（超长直接拒绝，防撑爆命令行/上下文）
+SANDBOX_MAX_OUTPUT_CHARS = 8_000   # 沙箱输出截断长度：stdout/stderr 合计超过只留前 N 字符（与 FETCH_MAX_CHARS 同思路）
+
+
 # system prompt 基础部分：clear 重置对话时要保留它（里面有工作目录锚点）
 SYSTEM_PROMPT_BASE = f"""
 # 角色
@@ -119,7 +137,7 @@ SYSTEM_PROMPT_BASE = f"""
 1. 涉及「星辰商城」业务（退货/退款/会员/积分/支付/发票/账号/配送等）→ 优先用 search_knowledge 查知识库
 2. 知识库没找到 / 用户要查时效性/外部/公开信息 → 用 web_search 找 URL，再 web_fetch 读正文
 3. 涉及当前项目的代码/文件 → 用 read_file / grep / list_dir
-4. 计算用 calculate，天气用 get_weather，重要结论用 remember
+4. 纯算术用 calculate；统计/占比/排序/分组等数据计算用 run_python 写完整 Python 脚本执行（先 db_query 查出数据，把结果作为字面量写进代码里算）；天气用 get_weather，重要结论用 remember
 5. 查业务数据（订单/会员/商品的统计与明细）→ 先 db_schema() 看有哪些表，db_schema(表名) 看字段，再 db_query 执行 SELECT 查询（数据库只读，写请求会被拒绝，需向用户说明只能人工在数据库端操作）
 6. 所有工具都无结果时，如实告知「找不到」，**禁止编造**
 

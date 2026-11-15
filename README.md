@@ -134,7 +134,7 @@
 
 - [x] H1 数据库只读工具：SQLite 起步（生产形态 = 真实库只读账号连接），schema 链接（大表只给模型相关结构）+ SQL 生成校验 + 只读硬控制 → 验证：自然语言查数答对（金牌 3 人）；「删掉所有订单」被拒且回复非空、数据无损；确定性验收 12 断言全 PASS（step6，含 WITH 夹写穿透预检被 ro 连接硬拦的纵深防御实证；防删库思路与 G1 路径白名单同源）
 - [x] H2 Docker 化（范围收窄：实际只编排 app，Redis / 向量库随 H4 / H6 再接进 compose）：应用 Dockerfile（slim 底座 + uv.lock 装依赖 + 跨包双拷 + CMD 先 db_seed 后 uvicorn --host 0.0.0.0）+ docker-compose（端口映射 / env_file 运行时注入密钥 / healthcheck 容器探针）→ 验证：compose up 后容器 healthy、step5b 四项全绿且脚本零改动（跨形态一致性）；K8s 到概念层（Pod / Deployment / 探针 / 控制循环 / Service 分发——G5 的 /health 即存活探针）；六阶段流程、学习版与生产版对照、agent 特殊性沉淀入 H 笔记
-- [ ] H3 代码执行沙箱工具（接在 Docker 化后）：Docker 容器沙箱 + 代码执行工具，agent 能写 Python 做计算 / 数据分析 / 自我验证 → 验证：模型通过写代码回答「这份数据的统计结论」类问题；恶意代码（读文件外传 / 死循环）被沙箱隔离不伤宿主；权限演进故事完整（裸 eval → ast 白名单 → 沙箱内自由执行）
+- [x] H3 代码执行沙箱工具：run_python 工具（模型写完整 Python 脚本，经 stdin 喂入一次性 python:3.13-slim 容器执行、跑完即焚）+ 五道 docker 围栏（--network none 断网 / 不挂载不传 -e 纯净文件系统 / --memory 128m / --cpus 0.5 / --pids-limit 64）+ 双层超时（容器内 GNU timeout 精确杀防容器泄漏 + 外层 subprocess 兜底）→ 验证：step7 确定性用例全绿（中文输出 / 统计答对 / ZeroDivisionError 回传 / 网络隔离 / 文件隔离 / 死循环超时 124 / 内存炸弹 OOM 137 / fork 炸弹被资源围栏拦下 + 宿主无损总检），--live 端到端模型自主走 db_schema → db_query → run_python 链路答对等级占比、纯算术走 calculate 分流；权限演进三幕（裸 eval → ast 白名单 → 沙箱自由执行）、退出码语义化与竞速围栏语义沉淀入 H 笔记
 - [ ] H4 Redis 会话外置：server.py 内存 dict 换 Redis（TTL 管时效、多副本共享）→ 验证：重启服务后第二轮还能答出上一轮说过的事实
 - [ ] H5 可观测性：logging 升级 JSON 结构化日志，FastAPI 中间件生成 request_id 贯穿调用链，计时中间件统计延迟分位数 → 验证：能回答「某时段 p95 延迟多少、哪个工具最慢、哪个会话最烧钱」三个问题
 - [ ] H6 向量库替换：rag_index.json → pgvector，增量更新（增删文档不重建全量索引）+ 元数据过滤（来源 / 权限 / 时间）→ 验证：C 阶段评测集跑分无退化（25/25 或不低于基线）

@@ -1,4 +1,4 @@
-"""tools.py —— 工具注册表 + 11 个工具实现。
+"""tools.py —— 工具注册表 + 12 个工具实现。
 
 一处注册同时产出实现与 schema（补上 A-3 跳过的注册表重构：旧版 TOOL_FUNCTIONS
 与 TOOLS 两处手工维护容易漂移）。加新工具只改一处：写实现 + 挂 @tool 注册。
@@ -31,6 +31,7 @@ from security_serve.agent.config import (
     SKIP_DIRS,
 )
 from security_serve.agent.safety import check_path, safe_eval
+from security_serve.agent.sandbox import run_code
 
 # ============== 注册表：一处定义，实现与 schema 同时产出 ==============
 
@@ -392,6 +393,27 @@ def db_query(sql: str) -> str:
     table += "\n".join(" | ".join(cell(v) for v in row) for row in rows)
     footer = f"\n（显示 {len(rows)} 行" + ("，结果未完，请在 SQL 里加 LIMIT 缩小范围）" if truncated else "）")
     return table + footer
+
+
+# ============== H3：代码执行沙箱工具 ==============
+# 与只读工具的"填空题"不同，执行类工具的行为由模型现场定义（整段代码），
+# 白名单管不住任意代码，防线换形态：docker 隔离环境兜底（实现见 sandbox.py）
+
+
+@tool(
+    "run_python",
+    "在隔离沙箱（一次性 Docker 容器，无网络/无本地文件/限时 10 秒）里执行一段完整的 Python 代码，返回 print 输出。用于统计/占比/排序/分组等数据计算（先 db_query 查出数据，把结果作为字面量写进代码再算）、批量文本处理、需要循环或标准库的逻辑。代码里必须用 print() 输出结果。纯算术直接用 calculate，不要用本工具。",
+    required=("code",),
+    code={"type": "string", "description": "完整的 Python 脚本（可多行多语句），数据以字面量写死在代码里，结果必须 print() 出来"},
+)
+def run_python(code: str) -> str:
+    """把模型写的代码送进沙箱执行（实现见 sandbox.py）。
+
+    边界：五道 docker 围栏 + 双层超时；代码超长直接拒绝；输出截断；
+    所有失败（超时/OOM/异常/docker 故障）都以错误串返回不抛异常——
+    模型拿得到错误信息，agent 循环不至于中断。
+    """
+    return run_code(code)
 
 
 # ============== 联网工具：web_search + web_fetch ==============
