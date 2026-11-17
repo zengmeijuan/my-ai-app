@@ -1,13 +1,37 @@
-# docker-compose.yml —— H2 服务清单：当前只有 app 一行；H4 学 Redis、H6 学向量库时往这里加行
+# docker-compose.yml —— 运行时，描述哪几个容器、按什么关系一起跑起来
+
+# docker-compose.yml —— 服务清单：app（H2）+ redis（H4 会话外置）；H6 向量库时再往这里加行
 services:
   app:
-    build: .
+    build: .  # image 是「去仓库取」，build 是「照 Dockerfile 造」
+    restart: unless-stopped   # 与 redis 同策略：WSL 实例被唤醒时自动拉回
     ports:
       - "8000:8000"      # 宿主机 8000 → 容器 8000：端口映射让外部可达容器内的服务
     env_file: .env       # .env 被.dockerignore挡在镜像外，运行时从这里注入环境变量（密钥不进镜像）
+    environment:
+      # 运行时注入 Redis 地址：redis 是 compose 服务名（内置 DNS），容器网内直呼其名；
+      # 本地进程形态不走这条注入，config 默认值落到 redis://localhost:6379/0（compose 把 redis 端口映射出来）
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy   # 等redis启动并且探针通过再启动 app：依赖服务的就绪链（K8s 探针思想）
     healthcheck:         # 容器级存活探针：G5 /health 的容器化对应物，也是 K8s 探针的前身
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  redis:
+    image: redis:7-alpine # Docker 官方仓库维护的通用 Redis 镜像
+    restart: unless-stopped   # 自愈：dockerd 重启（WSL 空闲关停后再唤醒）自动拉回未手动停止的容器
+    # 无持久化（学习版取舍）：会话是可再生状态，丢了重说一遍——纯内存模式换最高吞吐，
+    # 服务重启不失忆已由"数据在 Redis 进程里"保证；生产按业务对丢数据的容忍度开 RDB/AOF
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"      # 端口映射，格式「宿主机端口：容器端口」：宿主侧的 step8 验收脚本与本地进程形态的 uvicorn 都从这里连
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]   # 探针与服务同款 CLI：PING → PONG 即活
+      interval: 5s
+      timeout: 3s
+      retries: 5

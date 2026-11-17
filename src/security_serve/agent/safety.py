@@ -171,6 +171,18 @@ class Budget:
         """熔断判断：达到预算线即 True，调用方据此停止发起下一轮 LLM 请求。"""
         return self.used >= self.limit
 
+    def to_dict(self) -> dict:
+        """H4 会话外置：Budget 随会话一起进 Redis，序列化成 dict（纯数字字段，无状态丢失）。"""
+        return {"limit": self.limit, "used": self.used}
+
+    # cls 指向调用它的类
+    @classmethod
+    def from_dict(cls, data: dict) -> "Budget":
+        """从 Redis 存档还原 Budget 实例——load 会话后它要继续记账。"""
+        b = cls(limit=data["limit"])
+        b.used = data["used"]
+        return b
+
 
 # ============== G4：不可信文本封装（提示词注入防御的封装层） ==============
 

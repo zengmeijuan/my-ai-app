@@ -23,6 +23,7 @@ import sys
 
 from security_serve.agent.config import MEMORY_PATH, PROJECT_ROOT
 from security_serve.agent.sandbox import run_code
+from security_serve.agent.session_store import load_session
 from security_serve.agent.tools import db_query
 
 failures = []
@@ -120,12 +121,11 @@ if __name__ == "__main__":
     if "--live" in sys.argv:
         print("[9-10] LLM 端到端（真实 key，经 TestClient 走服务全链路）")
         from fastapi.testclient import TestClient
-        from security_serve.agent.server import _sessions, app
+        from security_serve.agent.server import app
 
         def tool_names_of(session_id: str) -> list:
-            # /chat 的会话表在进程内存（session.json 落盘是 CLI 形态的机制，server 不写它）；
-            # TestClient 与 server 同进程，直接读会话表判定工具调用（测行为不测措辞）
-            msgs = _sessions[session_id]["messages"]
+            # 会话已外置 Redis（H4）：从存储读回 messages 判定工具调用（测行为不测措辞）
+            msgs = load_session(session_id)["messages"]
             return [
                 c["function"]["name"]
                 for m in msgs if m.get("tool_calls")

@@ -81,6 +81,16 @@ COMPACT_KEEP_USER_ROUNDS = 1  # 保留尾部多少个完整 user 轮不压，确
 COMPACT_MAX_TOKENS = 600  # 压缩调用本身的回答上限，足够生成 200~400 字摘要
 
 
+# ============== H4 会话外置常量 ==============
+
+# Redis 接法：本地进程形态默认 localhost（compose 把 redis 端口映射出来）；
+# 容器形态由 compose environment 注入 redis://redis:6379/0（服务名即内置 DNS）。
+# redis:// —— 协议段，固定写法；redis —— 主机名段，由docker-compose.yml 里 services下的键名决定；6379——端口段，默认端口；/0——逻辑库端，16个库默认0号
+# 同一份代码两种形态，地址由环境决定——与 G5 的 BASE_URL 同一套注入思想
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+SESSION_TTL = 3600  # 会话过期秒数：1 小时无活动自动失效——时效管理外包给 Redis 引擎，无需自己写清理
+
+
 # ============== 数据目录 ==============
 
 # 运行数据目录：session / memory 都收在包内 data/ 下，用文件自身定位（cwd 无关）。

@@ -1,3 +1,5 @@
+# Dockerfile —— 构建时，描述怎么把一个项目造成一个镜像
+
 # Dockerfile —— H2 镜像配方：python:3.13-slim 底座 → uv.lock 装依赖 → 拷代码 → 起服务
 # 教学映射：uv.lock 锁依赖 ↔ Dockerfile 锁环境；G5 的 uvicorn 服务进程 ↔ 容器里的主进程
 FROM python:3.13-slim
