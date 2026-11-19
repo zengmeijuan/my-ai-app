@@ -29,13 +29,14 @@ PYTHONPATH=src 是 bash 专属前缀，PowerShell/cmd 会把它当程序名报�
 """
 import logging
 import threading
+import uuid
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from security_serve.agent.config import LOG_PATH
 from security_serve.agent.loop import run_agent_turn
-from security_serve.agent.logsetup import setup
+from security_serve.agent.logsetup import request_id_var, setup
 from security_serve.agent.memory import build_system_prompt
 from security_serve.agent.safety import Budget
 from security_serve.agent.session_store import count_sessions, load_session, save_session
@@ -47,6 +48,25 @@ app = FastAPI(title="my-ai-app agent server", version="G5")
 setup(LOG_PATH)
 # 获取 logger（记录器）实例，logging内部维护logger注册表，同名logger全进程只有一份，已存在直接返回，不存在才新建
 log = logging.getLogger("security_serve.server")
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """H5-2 请求链路标识：每个请求一个 request_id，贯穿它的全部日志行。
+
+    上游/网关传来的 X-Request-ID 优先（跨服务链路贯通惯例），没有则本服务
+    生成。set 进 ContextVar 后本请求的所有日志自动带上它（Formatter 读），
+    响应头回写同一 id 供客户端对账。头部是外部输入，截断防超长撑日志。
+    """
+    rid = (request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16])[:64]
+    # token 里存的是旧值，request_id_var被设置为新值
+    token = request_id_var.set(rid)
+    try:
+        response = await call_next(request)
+    finally:
+        request_id_var.reset(token)  # 恢复现场：恢复成set(rid) 之前的值。中间件常驻，请求之间不残留
+    response.headers["X-Request-ID"] = rid
+    return response
 
 # 本进程串行化锁：同进程并发请求对同一会话的「load → 改 → 写回」不能交错
 # （Redis 本身线程安全，锁护的是读改写序列的原子性）；多副本竞态见 docstring 说明

@@ -20,9 +20,14 @@ Formatter 的核心动作：LogRecord → dict → json.dumps 一行。业务字
 """
 import json
 import logging
+from contextvars import ContextVar
 from datetime import datetime
 from logging import FileHandler, Formatter, StreamHandler
 from pathlib import Path
+
+# H5-2 请求上下文：中间件 set（server.py），Formatter 读——横切字段不侵入业务调用点（server/loop 的日志行一行不改，request_id 自动进所有日志）。
+# ContextVar是"每个执行上下文一份"的机制：并发请求互不覆盖（全局变量做不到）
+request_id_var: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 # LogRecord 的全部标准属性：这些由 logging 机制自己填，extra 的 key 撞上会被
 # 覆盖/丢弃，收集时排除——Formatter 只收业务字段
@@ -48,6 +53,9 @@ class JsonFormatter(Formatter):
             # 非_RESERVED中标准属性的，属于额外的字段，需要保留
             if key not in _RESERVED:
                 data[key] = value
+        rid = request_id_var.get()
+        if rid:
+            data["request_id"] = rid  # 环境自带：哪次请求产生的日志，逐行可追溯
         # exc_info：异常信息在record 里是三元组（异常类型/值/traceback 对象），json.dumps 序列化不了，必须先 formatException 转成字符串
         if record.exc_info:
             data["traceback"] = self.formatException(record.exc_info)

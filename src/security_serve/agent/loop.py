@@ -6,6 +6,7 @@ G3 防线已接入：permission gate 在 run_one_tool 执行点（危险工具�
 G5 服务化适配：echo 开关区分输出去向——CLI（echo=True）打印到 stdout 给终端
 用户看，HTTP 服务（echo=False）转 logging 并用返回值交出回答。
 """
+import contextvars
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -169,9 +170,13 @@ def run_agent_turn(messages: list, budget: Budget, echo: bool = True) -> str:
 
         # 并行执行多个工具调用：独立请求并发跑，节约串行等待时间。
         # run_one_tool 在模块级定义，保证协议合法（messages 按 LLM 调用顺序追加）
+        # H5-2：ThreadPoolExecutor.submit 不复制调用者的 context（thread-local
+        # 时代的老 API）——工作线程读 request_id_var 会是 None。copy_context()
+        # 快照当前上下文、ctx.run 在快照里执行工具，请求上下文显式带进工作线程
+        ctx = contextvars.copy_context()
         with ThreadPoolExecutor(max_workers=len(assistant_tool_calls)) as pool:
             # map 保证按入参顺序返回，但内部并发执行
-            results = list(pool.map(run_one_tool, assistant_tool_calls))
+            results = list(pool.map(lambda call: ctx.run(run_one_tool, call), assistant_tool_calls))
 
         for call, name, args, result in results:
             # args 是 None 说明 JSON 解析失败，打印原始字符串
