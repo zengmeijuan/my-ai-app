@@ -33,13 +33,18 @@ import threading
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from security_serve.agent.config import LOG_PATH
 from security_serve.agent.loop import run_agent_turn
+from security_serve.agent.logsetup import setup
 from security_serve.agent.memory import build_system_prompt
 from security_serve.agent.safety import Budget
 from security_serve.agent.session_store import count_sessions, load_session, save_session
 
 # 创建FastAPI应用实例，是整个web应用的骨架：路由表、请求校验、响应序列化都长在它身上
 app = FastAPI(title="my-ai-app agent server", version="G5")
+# H5-1 结构化日志：显式配置 root（文件口 JSON + 控制台口人读），替代默认的
+# "info 被拦、warning 走 lastResort" 的零配置状态；日志文件是三问验收的数据源
+setup(LOG_PATH)
 # 获取 logger（记录器）实例，logging内部维护logger注册表，同名logger全进程只有一份，已存在直接返回，不存在才新建
 log = logging.getLogger("security_serve.server")
 
@@ -66,7 +71,8 @@ def _get_or_create_session(session_id: str) -> dict:
     恢复单会话快照，这里从 Redis 按 id 恢复任意会话——跨重启恢复由此补全。"""
     sess = load_session(session_id)
     if sess is None:
-        log.info("创建新会话: %s", session_id)
+        # 业务数据走 extra 字段（聚合可查），消息只留人读描述——H5-1 的核心改法
+        log.info("创建新会话", extra={"event": "session_new", "session_id": session_id})
         sess = {
             "messages": [{"role": "system", "content": build_system_prompt()}],
             "budget": Budget(),
@@ -87,7 +93,11 @@ def chat(req: ChatRequest) -> ChatResponse:
     with _sessions_lock:
         sess = _get_or_create_session(req.session_id)
         sess["messages"].append({"role": "user", "content": req.message})
-        log.info("会话 %s 第 %d 条消息: %r", req.session_id, len(sess["messages"]), req.message)
+        log.info("收到用户消息", extra={
+            "event": "chat_in",
+            "session_id": req.session_id,
+            "msg_index": len(sess["messages"]) - 1,  # 去掉 system 打底那条
+        })
 
         # echo=False：中间过程走日志，回答从返回值拿
         reply = run_agent_turn(sess["messages"], sess["budget"], echo=False)

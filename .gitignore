@@ -27,3 +27,6 @@ memory.md
 
 # H1 示例业务库（db_seed.build 幂等重建的生成物，不进版本库）
 shop.db
+
+# H5 结构化日志（运行观测数据，逐条 JSON；聚合查询的数据源）
+server.jsonl

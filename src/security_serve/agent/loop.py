@@ -20,16 +20,19 @@ from security_serve.agent.tools import TOOL_FUNCTIONS, TOOLS
 log = logging.getLogger(__name__)
 
 
-def _emit(msg: str, echo: bool, warning: bool = False) -> None:
+def _emit(msg: str, echo: bool, warning: bool = False, extra: dict | None = None) -> None:
     """输出去向开关：CLI 打 stdout（终端用户看），服务打日志（排障者看）。
 
-    logging 的分级/落盘/可检索是 print 没有的；CLI 下 root logger 默认
-    WARNING 级，info 不会漏出来，双场景互不干扰。
+    logging 的分级/落盘/可检索是 print 没有的；服务形态下 root 由 logsetup
+    配置（H5-1），info 进 JSON 文件。extra 业务字段只在日志分支生效，
+    CLI 的 print 分支不带（事件字段化不影响终端人读输出）。
     """
     if echo:
         print(msg)
+    elif warning:
+        log.warning(msg, extra=extra)
     else:
-        log.warning(msg) if warning else log.info(msg)
+        log.info(msg, extra=extra)
 
 
 def run_one_tool(call: dict) -> tuple:
@@ -80,7 +83,8 @@ def run_agent_turn(messages: list, budget: Budget, echo: bool = True) -> str:
             break
         # G3 预算熔断：发起 LLM 请求之前查线——请求发出去就要花钱，超线就不再发
         if budget.exceeded():
-            _emit(f"[预算熔断：本次会话已耗约 {budget.used} tokens，达到上限 {budget.limit}，停止调用 LLM]", echo, warning=True)
+            _emit(f"[预算熔断：本次会话已耗约 {budget.used} tokens，达到上限 {budget.limit}，停止调用 LLM]",
+                  echo, warning=True, extra={"event": "budget_breach", "used_tokens": budget.used, "budget_limit": budget.limit})
             break
 
         # 流式调 LLM（stream=True）。create() 只建立连接就返回，之后逐块收到 chunk。
@@ -172,7 +176,8 @@ def run_agent_turn(messages: list, budget: Budget, echo: bool = True) -> str:
         for call, name, args, result in results:
             # args 是 None 说明 JSON 解析失败，打印原始字符串
             args_repr = args if args is not None else f"(JSON 解析失败: {call['function']['arguments']!r})"
-            _emit(f"  -> [调用工具] {name}({args_repr})", echo)
+            _emit(f"  -> [调用工具] {name}({args_repr})", echo,
+                  extra={"event": "tool_call", "tool": name})
             # 即使失败也必须回一条工具消息：否则有 tool_call 却没有对应结果，
             # 消息序列不符合协议，下一次 API 调用会被服务端直接拒绝
             # G4：所有工具结果统一视为不可信文本（含错误串——信任不靠枚举来源），

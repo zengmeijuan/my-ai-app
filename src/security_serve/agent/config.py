@@ -133,6 +133,13 @@ SANDBOX_MAX_CODE_CHARS = 20_000    # 模型提交的代码长度上限（超长�
 SANDBOX_MAX_OUTPUT_CHARS = 8_000   # 沙箱输出截断长度：stdout/stderr 合计超过只留前 N 字符（与 FETCH_MAX_CHARS 同思路）
 
 
+# ============== H5 可观测性常量 ==============
+
+# JSON 结构化日志文件：三问验收（p95 延迟 / 哪个工具最慢 / 哪个会话最烧钱）的
+# 聚合数据源。放在包内 data/ 下与其他运行数据同处（文件自身定位，cwd 无关）
+LOG_PATH = _DATA_DIR / "server.jsonl"
+
+
 # system prompt 基础部分：clear 重置对话时要保留它（里面有工作目录锚点）
 SYSTEM_PROMPT_BASE = f"""
 # 角色
