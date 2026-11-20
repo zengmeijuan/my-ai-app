@@ -29,6 +29,7 @@ PYTHONPATH=src 是 bash 专属前缀，PowerShell/cmd 会把它当程序名报�
 """
 import logging
 import threading
+import time
 import uuid
 
 from fastapi import FastAPI, HTTPException, Request
@@ -48,6 +49,36 @@ app = FastAPI(title="my-ai-app agent server", version="G5")
 setup(LOG_PATH)
 # 获取 logger（记录器）实例，logging内部维护logger注册表，同名logger全进程只有一份，已存在直接返回，不存在才新建
 log = logging.getLogger("security_serve.server")
+
+# 中间件注册时倒序插队，新注册的插到列表头部。构建时逆序包裹，后注册的包在外壳上，先被请求碰到
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    """H5-3 请求计时：每请求一行 event=http_request 日志，聚合出延迟分位数。
+
+    注册顺序有讲究：FastAPI 的 add_middleware 是 insert(0)，后注册的包在
+    更外层、先执行（与直觉相反）——所以计时必须注册在 request_id **之前**
+    （本文件里定义在其上方），成为它的内层、后执行，此刻 rid 已 set 进
+    ContextVar；且每层 BaseHTTPMiddleware 跑在独立 task（context 是各自
+    创建时刻的副本），外层读不到内层 set 的值——顺序反了 request_id 字段
+    就是 None，step9b [1] 断言验收的正是这一点。perf_counter 是单调时钟
+    ——只测流逝时长，不受系统对时/NTP 回拨干扰，计时用它而非 time.time()。
+    call_next 抛异常（依赖挂了/业务炸了）也要计时落日志：故障请求从统计
+    里消失是最危险的盲区，finally 兜住记 500，异常本身继续向上抛给框架。
+    """
+    start = time.perf_counter()
+    status = 500
+    try:
+        # call_next内部做的事：把“剩余整链”(下一层中间件 → 路由 → 端点)扔进新 task 启动，如果中间件忘记调用它，请求死在这一层
+        # 这层函数体在此暂停，控制权交给下游链路，等它办完事（响应头抵达内存流）才从这一行恢复
+        response = await call_next(request)
+        status = response.status_code
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000
+        log.info(f"{request.method} {request.url.path} -> {status}",
+                 extra={"event": "http_request", "method": request.method,
+                        "path": request.url.path, "status": status,
+                        "duration_ms": round(duration_ms, 1)})
+    return response
 
 
 @app.middleware("http")
