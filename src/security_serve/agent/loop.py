@@ -9,6 +9,7 @@ G5 服务化适配：echo 开关区分输出去向——CLI（echo=True）打印
 import contextvars
 import json
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 from openai import APITimeoutError, APIConnectionError, APIStatusError
@@ -19,6 +20,12 @@ from security_serve.agent.safety import Budget, ask_user, needs_confirm, wrap_un
 from security_serve.agent.tools import TOOL_FUNCTIONS, TOOLS
 
 log = logging.getLogger(__name__)
+
+
+def _elapsed_ms(start: float) -> float:
+    """H5-4 耗时口径：perf_counter 起点到现在的毫秒数，round 3 位——
+    工具执行常在微秒~毫秒级，round 1 位会全成 0.0，聚合就没意义了。"""
+    return round((time.perf_counter() - start) * 1000, 3)
 
 
 def _emit(msg: str, echo: bool, warning: bool = False, extra: dict | None = None) -> None:
@@ -37,32 +44,35 @@ def _emit(msg: str, echo: bool, warning: bool = False, extra: dict | None = None
 
 
 def run_one_tool(call: dict) -> tuple:
-    """执行单个工具调用，返回 (call, name, args, result) 四元组。
+    """执行单个工具调用，返回 (call, name, args, result, duration_ms) 五元组。
 
     所有异常都在这里兜住，不让一个工具的失败影响其他并行执行的任务。
     TOOL_FUNCTIONS 在并行路径中只读访问，多线程安全。
+    计时含 JSON 解析→gate→执行全程（H5-4 工具归因的原料），计时发生在
+    工具自己的工作线程里，多个并行工具各自独立、无锁无争用。
     """
+    start = time.perf_counter()
     name = call["function"]["name"]
     args_raw = call["function"]["arguments"]
     try:
         args = json.loads(args_raw)
     except json.JSONDecodeError:
-        return call, name, None, "错误：arguments 不是合法 JSON，请检查字段名是否与 schema 描述一致后重新调用"
+        return call, name, None, "错误：arguments 不是合法 JSON，请检查字段名是否与 schema 描述一致后重新调用", _elapsed_ms(start)
     func = TOOL_FUNCTIONS.get(name)
     if not func:
-        return call, name, args, f"未知工具: {name}"
+        return call, name, args, f"未知工具: {name}", _elapsed_ms(start)
     # G3 permission gate：危险工具执行前过人工确认。拒绝不走异常，而是把拒绝
     # 当作一次正常的工具结果回传给 LLM（它看到原因后自行调整下一步）；
     # 放行路径一行不改。gate 在 loop 执行点而非 tools 层——直接调工具函数不受影响
     if needs_confirm(name) and not ask_user(name, str(args)):
-        return call, name, args, "用户拒绝执行此工具"
+        return call, name, args, "用户拒绝执行此工具", _elapsed_ms(start)
     try:
         result = func(**args)
     except TypeError as e:
         result = f"参数不匹配: {e}"
     except Exception as e:
         result = f"工具执行异常: {e}"
-    return call, name, args, result
+    return call, name, args, result, _elapsed_ms(start)
 
 
 def run_agent_turn(messages: list, budget: Budget, echo: bool = True) -> str:
@@ -93,6 +103,8 @@ def run_agent_turn(messages: list, budget: Budget, echo: bool = True) -> str:
         # 所以 create 和 for 循环要放在同一个 try 里兜住
         content_parts = []   # 文本片段累计器，流结束后拼成完整回复
         tool_calls_acc = {}  # index -> {"id","name","arguments"}，工具调用分片组装器
+        usage = None         # H5-4：本轮真实用量（收尾块送达才有；None 则记账走字符折算降级）
+        llm_start = time.perf_counter()  # H5-4：LLM 调用耗时（建连→流消费完），归因的另一边
         try:
             stream = client.chat.completions.create(
                 model=model,
@@ -100,10 +112,18 @@ def run_agent_turn(messages: list, budget: Budget, echo: bool = True) -> str:
                 tools=TOOLS,
                 timeout=API_TIMEOUT,
                 stream=True,
+                stream_options={"include_usage": True},  # 流式默认不发 usage，显式向服务端要收尾块
             )
             for chunk in stream:
+                # H5-4：usage 有两种流式形态——OpenAI 标准在"无 choices 的收尾块"，
+                # 本网关（Anthropic 兼容层）挂在最后一个普通 chunk 上（usage_probe
+                # 对照实验实证：不带 stream_options 则完全没有）。任何 chunk 带
+                # usage 都捕获，两种形态通吃
+                chunk_usage = getattr(chunk, "usage", None)
+                if chunk_usage:
+                    usage = chunk_usage
                 if not chunk.choices:
-                    continue  # 部分服务端在最后发一个只带用量统计、无 choices 的收尾块
+                    continue  # 无 choices 的收尾块（纯统计），无内容可消费
                 delta = chunk.choices[0].delta
                 if delta.content:
                     # flush=True 立即刷新 stdout 缓冲区，否则逐字打印会攒成一大段才显示；
@@ -138,13 +158,24 @@ def run_agent_turn(messages: list, budget: Budget, echo: bool = True) -> str:
 
         final_content = "".join(content_parts)
 
-        # G3 成本记账：本轮 LLM 调用已完成，此刻 messages 还没 append 本轮产物，
-        # 正好就是这次请求发送出去的输入；输出 = 回复文本 + 工具调用参数。
-        # API 出错走上面的 break，到不了这里——没产出不计费
-        round_chars = context_stats_size(messages) + len(final_content)
-        if tool_calls_acc:
-            round_chars += sum(len(slot["arguments"]) for slot in tool_calls_acc.values())
-        budget.record(round_chars)
+        # G3 成本记账：本轮 LLM 调用已完成，此刻 messages 还没 append 本轮产物。
+        # API 出错走上面的 break，到不了这里——没产出不计费。
+        # H5-4 双口径：usage 收尾块送达 → 真 tokens 精确入账 + 落 llm_usage 行；否则走字符路径
+        # （模型/tokens/LLM 耗时，归因聚合的原料）；没送达 → 字符折算降级（H4 前口径）
+        if usage:
+            llm_ms = round((time.perf_counter() - llm_start) * 1000, 1)
+            budget.record_tokens(usage.total_tokens)
+            _emit(f"[LLM 用量] prompt={usage.prompt_tokens} completion={usage.completion_tokens} total={usage.total_tokens} ({llm_ms}ms)",
+                  echo, extra={"event": "llm_usage", "model": model,
+                               "prompt_tokens": usage.prompt_tokens,
+                               "completion_tokens": usage.completion_tokens,
+                               "total_tokens": usage.total_tokens,
+                               "duration_ms": llm_ms})
+        else:
+            round_chars = context_stats_size(messages) + len(final_content)
+            if tool_calls_acc:
+                round_chars += sum(len(slot["arguments"]) for slot in tool_calls_acc.values())
+            budget.record(round_chars)
 
         # 没调工具 = 最终回答，结束本轮。流式没有现成的 message 对象，
         # assistant 消息要手工组装塞回 messages，会话落盘才完整
@@ -178,11 +209,11 @@ def run_agent_turn(messages: list, budget: Budget, echo: bool = True) -> str:
             # map 保证按入参顺序返回，但内部并发执行
             results = list(pool.map(lambda call: ctx.run(run_one_tool, call), assistant_tool_calls))
 
-        for call, name, args, result in results:
+        for call, name, args, result, duration_ms in results:
             # args 是 None 说明 JSON 解析失败，打印原始字符串
             args_repr = args if args is not None else f"(JSON 解析失败: {call['function']['arguments']!r})"
             _emit(f"  -> [调用工具] {name}({args_repr})", echo,
-                  extra={"event": "tool_call", "tool": name})
+                  extra={"event": "tool_call", "tool": name, "duration_ms": duration_ms})
             # 即使失败也必须回一条工具消息：否则有 tool_call 却没有对应结果，
             # 消息序列不符合协议，下一次 API 调用会被服务端直接拒绝
             # G4：所有工具结果统一视为不可信文本（含错误串——信任不靠枚举来源），

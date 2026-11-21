@@ -151,12 +151,11 @@ def ask_user(name: str, args_repr: str) -> bool:
 
 
 class Budget:
-    """会话级成本预算：字符折算 token 记账，超线熔断。
+    """会话级成本预算：token 记账，超线熔断。
 
-    估算版取舍：不用 API 返回的真 usage 字段，按 CHARS_PER_TOKEN 把字符数
-    折算成 token——流式响应拿 usage 要额外开关且部分第三方服务不给，估算护栏
-    不追求精确。折算系数对英文偏多记（早熔断）、中文偏少记（晚熔断），
-    熔断线本身留了余量，够用。
+    H5-4 起双口径：流式 usage 收尾块送达走 record_tokens（真 tokens，精确）；
+    拿不到 usage（异常/部分第三方服务）回落 record 的字符折算（估算护栏，
+    CHARS_PER_TOKEN 对英文偏多记早熔断、中文偏少记晚熔断，熔断线留了余量）。
     """
 
     def __init__(self, limit: int = SESSION_TOKEN_BUDGET):
@@ -164,8 +163,12 @@ class Budget:
         self.used = 0
 
     def record(self, chars: int) -> None:
-        """记账：把这一轮消耗的字符数折算成 token 累加。"""
+        """记账：把这一轮消耗的字符数折算成 token 累加（usage 拿不到时的降级口径）。"""
         self.used += chars // CHARS_PER_TOKEN
+
+    def record_tokens(self, tokens: int) -> None:
+        """H5-4 真实用量记账：流式 usage 收尾块送达时按真 tokens 累加，不再折算。"""
+        self.used += tokens
 
     def exceeded(self) -> bool:
         """熔断判断：达到预算线即 True，调用方据此停止发起下一轮 LLM 请求。"""
