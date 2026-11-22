@@ -1,6 +1,6 @@
 # docker-compose.yml —— 运行时，描述哪几个容器、按什么关系一起跑起来
 
-# docker-compose.yml —— 服务清单：app（H2）+ redis（H4 会话外置）；H6 向量库时再往这里加行
+# 服务清单：app（H2）+ redis（H4 会话外置）+ pgvector（H6 向量库，rag_index.json 的数据库化替身）
 services:
   app:
     build: .  # image 是「去仓库取」，build 是「照 Dockerfile 造」
@@ -12,6 +12,9 @@ services:
       # 运行时注入 Redis 地址：redis 是 compose 服务名（内置 DNS），容器网内直呼其名；
       # 本地进程形态不走这条注入，config 默认值落到 redis://localhost:6379/0（compose 把 redis 端口映射出来）
       REDIS_URL: redis://redis:6379/0
+      # 运行时注入向量库连接串（H6-1 的 vector_store 消费）：pgvector 同样是服务名寻址；
+      # DSN（Data Source Name）= 数据源连接串的行业术语，五段：协议://用户:密码@主机:端口/库名
+      PG_DSN: postgresql://rag:rag@pgvector:5432/ragdb
     depends_on:
       redis:
         condition: service_healthy   # 等redis启动并且探针通过再启动 app：依赖服务的就绪链（K8s 探针思想）
@@ -35,3 +38,34 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  # H6 向量库：pgvector/pgvector:pg17 = PostgreSQL 17 官方镜像 + 预编译 pgvector 扩展
+  # （官方 postgres 镜像不含该扩展，扩展需单独编译安装——pgvector 项目自己发的整合镜像）。
+  # 本质就是 PostgreSQL，psycopg 连它、建表、查表与普通 PG 无异，区别只是能 CREATE EXTENSION vector
+  pgvector:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped   # 与 redis 同策略：WSL 唤醒自动拉回
+    environment:
+      # 三个 POSTGRES_* 是镜像约定的首启初始化参数：首次启动自动建库、建用户（POSTGRES_USER
+      # 创建的是超级用户，有 CREATE EXTENSION 的权限）。学习版明文简单密码；
+      # 生产走 secret 管理（G5 §8 认证限流清单的数据库版）
+      POSTGRES_DB: ragdb
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+    ports:
+      - "5432:5432"      # 宿主机 5432 → 容器 5432：宿主侧的 step10 系列验收与本地进程形态都从这里连
+    volumes:
+      # named volume 持久化：知识库索引虽可再生（docs → sync 重建），但重建要跑 embedding 计算
+      # （分钟级）——用存储成本换重复计算成本。named volume 才解决容器重建（匿名卷随重建更换 = 假持久化，H4 教训）
+      - pgdata:/var/lib/postgresql/data # 容器内 PG 数据目录 → 名为 pgdata 的存储区，在WSL内物理位置：/var/lib/docker/volumes/my-ai-app_pgdata/_data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "rag", "-d", "ragdb"]   # 探针与 PG 自带 CLI：就绪即返回 accepting connections
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s   # PG 首启要做一次初始化（建库建用户），给就绪留缓冲
+
+# 容器文件系统模型：镜像只读层 + 容器读写层，读写层的致命属性是：生命周期绑容器。
+# volume就是临读写层外接的持久存储区，把WSL宿主机上的一块目录挂载进容器内的指定路径，容器往这个路径写的数据实际落在宿主机，容器删了她还在
+volumes:
+  pgdata:   # 顶级声明：volume 的生命周期独立于容器（compose down 不删，--volumes 才删）
