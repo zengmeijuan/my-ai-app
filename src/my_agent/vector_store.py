@@ -6,12 +6,14 @@
 限制在本文件之内。rag.py / tools.py 不出现 psycopg 字样；将来换向量库
 （Milvus / Qdrant）或加缓存只动这一层。
 
-不是 ORM、不是通用封装：只有项目需要的三个操作——建表 / 全量灌库 / 检索。
+不是 ORM、不是通用封装：只有项目需要的操作——建表 / 全量灌库 / 增量同步 / 检索。
 
 表 doc_chunks 与 rag_index.json 的对应关系：
   JSON {"chunks": [{source, text}], "vectors": [[768 floats]]}
-    → 表 doc_chunks(id, source, text, embedding vector(768))，行级一行一 chunk。
+    → 表 doc_chunks(id, source, text, embedding vector(768), content_hash)，行级一行一 chunk。
   换库不换模型：向量仍由 jina 模型产出，pgvector 只收现成向量（存 + 检索）。
+  H6-2 增 content_hash 列：文档级 sha256 指纹（切块前全文算一次），同文档所有
+  chunk 行共用——增量同步拿它 diff，文档不变则零计算跳过。
 
 运行前：docker compose up -d pgvector（表结构与数据可再生，sync-pg 一条命令重建）
 """
@@ -55,28 +57,62 @@ def ensure_table():
             " id serial PRIMARY KEY,"                   # 自增整数主键id
             " source text NOT NULL,"
             " text text NOT NULL,"
-            f" embedding vector({DIM}) NOT NULL)"       # 维度锁死在列定义
+            f" embedding vector({DIM}) NOT NULL,"       # 维度锁死在列定义
+            " content_hash text)"                       # H6-2：文档级 sha256 指纹，同文档所有 chunk 共用
         )
+        # 老表幂等升级：H6-1 灌过数据的表没有该列，ADD COLUMN IF NOT EXISTS 对已有列是空操作
+        conn.execute("ALTER TABLE doc_chunks ADD COLUMN IF NOT EXISTS content_hash text")
 
 
-def sync_all(chunks_with_vectors: list[tuple[str, str, list[float]]]):
-    """全量灌库：清表 + 批量插入（H6-2 升级为按 content_hash 增量）。
+def sync_all(rows: list[tuple[str, str, list[float], str]]):
+    """全量灌库（sync-pg --full）：清表 + 批量插入。
 
-    chunks_with_vectors: [(source, text, vector_list)]——embedding 计算留在
-    调用方（rag.py），本层只管存取：向量化模型与向量库是两个工种。
+    rows: [(source, text, vector_list, content_hash)]——embedding 计算与指纹
+    计算都留在调用方（rag.py），本层只管存取：向量化模型与向量库是两个工种。
+    增量路径走 insert_chunks / delete_by_source，本函数只在 --full 时被调。
     """
     ensure_table()
     with _connect() as conn:
         conn.execute("TRUNCATE doc_chunks")     # 清空全表，直接丢弃数据页，比逐行delete快
-        # 批量操作，需要显式创建游标，用来执行SQL和取结果的句柄。
-        with conn.cursor() as cur:
-            # executemany 把 N 组参数复用同一条 INSERT 语句，51 个 chunk 就是 51 组 (source, text, '[...]')
-            cur.executemany(
-                "INSERT INTO doc_chunks (source, text, embedding) VALUES (%s, %s, %s)",
-                [(src, text, to_pgvec(vec)) for src, text, vec in chunks_with_vectors],
-            )
+        _insert_rows(conn, rows)
         n = conn.execute("SELECT COUNT(*) FROM doc_chunks").fetchone()[0]
-    print(f"PG 向量库灌库完成：{n} 个 chunk → doc_chunks（全量重建）")
+    print(f"PG 向量库全量重建完成：{n} 个 chunk → doc_chunks（TRUNCATE 重灌）")
+
+
+def _insert_rows(conn, rows):
+    """批量插入公共执行体：sync_all 与 insert_chunks 共用同一条 INSERT 语句。"""
+    # 批量操作，需要显式创建游标，用来执行SQL和取结果的句柄。
+    with conn.cursor() as cur:
+        # executemany 把 N 组参数复用同一条 INSERT 语句，51 个 chunk 就是 51 组 (source, text, '[...]', hash)
+        cur.executemany(
+            "INSERT INTO doc_chunks (source, text, embedding, content_hash) VALUES (%s, %s, %s, %s)",
+            [(src, text, to_pgvec(vec), h) for src, text, vec, h in rows],
+        )
+
+
+def insert_chunks(rows: list[tuple[str, str, list[float], str]]):
+    """增量插入（H6-2）：只插 diff 出来的新增/变更 chunk，其他文档的行原封不动。"""
+    with _connect() as conn:
+        _insert_rows(conn, rows)
+
+
+def fetch_hashes() -> dict[str, str | None]:
+    """库内指纹对照面：{source: content_hash}，增量 diff 的另一半。
+
+    同文档所有 chunk 行共用同一指纹，多行同 source 在 dict 推导里自然折叠
+    （值相同，覆盖无损）。H6-1 灌的旧行该列为 NULL——NULL 与任何新指纹都不
+    相等，首次增量同步会自动把旧行判成「变更」完成升级，无需手工迁移。
+    """
+    with _connect() as conn:
+        rows = conn.execute("SELECT source, content_hash FROM doc_chunks").fetchall()
+    return {src: h for src, h in rows}
+
+
+def delete_by_source(source: str) -> int:
+    """删除一个文档的全部 chunk 行（变更替换与文档下线共用），返回删除行数。"""
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM doc_chunks WHERE source = %s", (source,))
+        return cur.rowcount  # cursor.rowcount：本条语句影响（删掉）的行数
 
 
 def search(query_vec, top_k: int) -> list[dict]:

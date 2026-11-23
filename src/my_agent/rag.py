@@ -20,7 +20,8 @@ embedding 模型：jinaai/jina-embeddings-v2-base-zh（本地 ONNX 推理，免�
 
 运行：
   uv run python -m my_agent.rag build                      # 构建文件版索引（docs/ 变更后重跑）
-  uv run python -m my_agent.rag sync-pg                    # 同语料灌库 pgvector（前置 pgvector 容器）
+  uv run python -m my_agent.rag sync-pg                    # 增量同步 pgvector（content_hash diff，H6-2）
+  uv run python -m my_agent.rag sync-pg --full             # 全量重建（TRUNCATE 重灌）
   uv run python -m my_agent.rag ask 退货的钱多久能退回来    # 提问（检索后端由 RAG_BACKEND 分流）
 """
 import os
@@ -35,6 +36,7 @@ from pathlib import Path
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
+import hashlib
 import json
 import re
 import sys
@@ -134,24 +136,76 @@ def build_index():
     print(f"索引构建完成：{n_files} 个文件 → {len(chunks)} 个 chunk → {INDEX_PATH}")
 
 
-def sync_pg():
-    """离线管道 pgvector 版：语料 → 向量化 → 灌库 doc_chunks 表。
+def sync_pg(full: bool = False):
+    """离线管道 pgvector 版：语料 → 指纹 diff → 按需向量化 → 灌库 doc_chunks。
 
-    与 build_index 同一段切块、同一个 embedding 模型，只有「存到哪」不同
-    （文件 vs PG）——换库不换模型。前置：pgvector 容器在跑
-    （docker compose up -d pgvector）。H6-2 将把全量重建升级为按 content_hash 增量。
+    H6-2 增量更新：每个文档算 content_hash（sha256，算在切块前的原始全文上，
+    同一文档所有 chunk 共用一个指纹，文档一个字没动指纹就不变）。与库内指纹
+    diff 出四类处置：
+      新增（库无盘有）→ 向量化插入；
+      变更（指纹不同）→ DELETE 旧行 + 插新行——chunk 集合是整体替换语义
+        （新切块结果行数都可能不同），DELETE+INSERT 比 逐行 UPDATE 干净；
+      删除（库有盘无）→ 清行；
+      不变 → 跳过，零计算（连 embedding 模型都不加载）。
+    --full 退回全量重建（TRUNCATE 重灌），首次升级 / 怀疑库脏时的兜底。
+    前置：pgvector 容器在跑（docker compose up -d pgvector）。
     """
-    chunks = load_chunks()
-    if not chunks:
+    docs_text = {
+        fname: (DOCS_DIR / fname).read_text(encoding="utf-8")
+        for fname in sorted(os.listdir(DOCS_DIR))
+        if fname.endswith(".md")
+    }
+    if not docs_text:
         print(f"未在 {DOCS_DIR}/ 找到任何 .md 文件，先创建语料")
         return
+    new_hashes = {
+        src: hashlib.sha256(text.encode("utf-8")).hexdigest()
+        for src, text in docs_text.items()
+    }
+
+    # 全量重建
+    if full:
+        vector_store.sync_all(_embed_rows(sorted(docs_text), new_hashes))
+        return
+
+    # ---- 增量 diff：磁盘新指纹 vs 库内旧指纹 ----
+    # 全量路径的建表/加列在 sync_all 里；增量路径先自己确保表结构升级（幂等）
+    vector_store.ensure_table()
+    old_hashes = vector_store.fetch_hashes()
+    added   = [s for s in new_hashes if s not in old_hashes]                      # 库无盘有
+    changed = [s for s in new_hashes if s in old_hashes and old_hashes[s] != new_hashes[s]]  # 指纹不同（含旧行 NULL）
+    removed = [s for s in old_hashes if s not in new_hashes]                      # 库有盘无
+
+    for src in removed:
+        n = vector_store.delete_by_source(src)
+        print(f"  - 已删除 {src}（清掉 {n} 个旧 chunk）")
+
+    targets = added + changed
+    if targets:
+        for src in changed:  # 变更先删旧行，再随新增一起插（见 docstring：整体替换语义）
+            vector_store.delete_by_source(src)
+        vector_store.insert_chunks(_embed_rows(targets, new_hashes))
+    else:
+        print("  无新增/变更，跳过向量化（embedding 模型未加载）")
+
+    unchanged = len(new_hashes) - len(added) - len(changed)
+    print(f"增量同步完成：新增 {len(added)} / 变更 {len(changed)} / 删除 {len(removed)} / 不变跳过 {unchanged}")
+
+
+def _embed_rows(sources: list[str], hashes: dict[str, str]) -> list[tuple[str, str, list[float], str]]:
+    """把 diff 出的目标文档切块并向量化 → 待插行 [(source, text, vector, hash)]。
+
+    load_chunks 切全量再按 source 过滤——51 个 chunk 的切块是毫秒级开销，
+    不值得为省它另写一套按文档切块。模型懒加载在此处触发：纯删除或全不变
+    的同步走不到这里，161M 参数模型根本不进内存。
+    """
+    targets = set(sources)
+    chunks = [c for c in load_chunks() if c["source"] in targets]
     model = get_embed_model()
-    # embed() 是惰性生成器，zip 逐个消费，与 chunks 一一配对
-    rows = [
-        (c["source"], c["text"], v.tolist())
+    return [
+        (c["source"], c["text"], v.tolist(), hashes[c["source"]])
         for c, v in zip(chunks, model.embed([c["text"] for c in chunks]))
     ]
-    vector_store.sync_all(rows)
 
 
 # ============== 3. 在线管道：问题 → 检索 → 生成 ==============
@@ -253,13 +307,14 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法：")
         print("  uv run python -m my_agent.rag build                  # 构建文件版索引（docs/ 变更后重跑）")
-        print("  uv run python -m my_agent.rag sync-pg                # 同语料灌库 pgvector（前置 pgvector 容器）")
+        print("  uv run python -m my_agent.rag sync-pg                # 增量同步 docs/ → pgvector（按 content_hash diff，前置 pgvector 容器）")
+        print("  uv run python -m my_agent.rag sync-pg --full         # 全量重建（TRUNCATE 重灌，增量出问题时的兜底）")
         print("  uv run python -m my_agent.rag ask <问题>             # 提问，如：")
         print("      uv run python -m my_agent.rag ask 退货的钱多久能退回来")
     elif sys.argv[1] == "build":
         build_index()
     elif sys.argv[1] == "sync-pg":
-        sync_pg()
+        sync_pg(full="--full" in sys.argv[2:])
     elif sys.argv[1] == "ask":
         if len(sys.argv) < 3:
             print("请提供问题，如：uv run python -m my_agent.rag ask 退货的钱多久能退回来")
