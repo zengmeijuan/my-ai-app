@@ -19,8 +19,9 @@ embedding 模型：jinaai/jina-embeddings-v2-base-zh（本地 ONNX 推理，免�
 161M 参数，768 维，中英双语）——网关不支持 embedding 接口，故走本地路线。
 
 运行：
-  uv run python -m my_agent.rag build                      # 构建索引（docs/ 变更后重跑）
-  uv run python -m my_agent.rag ask 退货的钱多久能退回来    # 提问
+  uv run python -m my_agent.rag build                      # 构建文件版索引（docs/ 变更后重跑）
+  uv run python -m my_agent.rag sync-pg                    # 同语料灌库 pgvector（前置 pgvector 容器）
+  uv run python -m my_agent.rag ask 退货的钱多久能退回来    # 提问（检索后端由 RAG_BACKEND 分流）
 """
 import os
 from pathlib import Path
@@ -43,6 +44,8 @@ from dotenv import load_dotenv
 from fastembed import TextEmbedding
 from openai import OpenAI
 
+from my_agent import vector_store
+
 load_dotenv()  # 读 .env 拿 API_KEY / BASE_URL / MODEL（与 agent.py 同款配置）
 
 
@@ -56,6 +59,12 @@ EMBED_MODEL = "jinaai/jina-embeddings-v2-base-zh"  # 本地 embedding 模型
 CHAT_MODEL = os.environ.get("MODEL", "gpt-4o-mini")  # 生成侧用网关 chat 模型
 TOP_K = 3              # 每次检索取最相似的 3 个 chunk
 API_TIMEOUT = 60       # chat API 超时秒数（与 agent.py 一致）
+
+# 检索后端分流：json = 文件版向量库（rag_index.json + numpy 余弦，默认）；
+# pgvector = 数据库版（PG doc_chunks 表 + <=> 余弦距离，H6-1）。
+# 换库不换模型：两条后端共用同一 fastembed 编码与同一 TOP_K，近邻只在来源上不同——
+# 这是「双后端评测无退化」成立的前提。外置开关 = 同一份代码两种部署形态（与 DSN 同思想）
+RAG_BACKEND = os.environ.get("RAG_BACKEND", "json")
 
 # 懒加载单例模式：embedding 模型很重（161M 参数），全进程只加载一次，之后处处复用
 _model = None
@@ -125,21 +134,48 @@ def build_index():
     print(f"索引构建完成：{n_files} 个文件 → {len(chunks)} 个 chunk → {INDEX_PATH}")
 
 
+def sync_pg():
+    """离线管道 pgvector 版：语料 → 向量化 → 灌库 doc_chunks 表。
+
+    与 build_index 同一段切块、同一个 embedding 模型，只有「存到哪」不同
+    （文件 vs PG）——换库不换模型。前置：pgvector 容器在跑
+    （docker compose up -d pgvector）。H6-2 将把全量重建升级为按 content_hash 增量。
+    """
+    chunks = load_chunks()
+    if not chunks:
+        print(f"未在 {DOCS_DIR}/ 找到任何 .md 文件，先创建语料")
+        return
+    model = get_embed_model()
+    # embed() 是惰性生成器，zip 逐个消费，与 chunks 一一配对
+    rows = [
+        (c["source"], c["text"], v.tolist())
+        for c, v in zip(chunks, model.embed([c["text"] for c in chunks]))
+    ]
+    vector_store.sync_all(rows)
+
+
 # ============== 3. 在线管道：问题 → 检索 → 生成 ==============
 
-def retrieve(query: str, index: dict) -> list[dict]:
-    """在索引里找与 query 最相似的 top_k 个 chunk。
+def retrieve(query: str, index: dict | None) -> list[dict]:
+    """在索引里找与 query 最相似的 top_k 个 chunk（按 RAG_BACKEND 分流）。
 
     相似度用余弦（cosine）：两向量夹角的余弦值，只看方向不看长度，
     取值 -1~1，越大越相似。文本没法直接算距离，都先转成向量再比。
-    学习版用 numpy 暴力算全量相似度（20 个 chunk 毫无压力）；生产向量库
-    （FAISS/Milvus 等）的核心就是把 top-k 做到亿级向量也毫秒级。
+    两条后端共享「问题向量化」前半程，只在「近邻来源」上分岔：
+    - pgvector：查询向量交给 vector_store.search，排序下推进 SQL（<=>）
+    - json：numpy 暴力算全量相似度（20 个 chunk 毫无压力）；
+      生产向量库（FAISS/Milvus 等）的核心就是把 top-k 做到亿级也毫秒级
     """
     model = get_embed_model()
     # np.array 把普通 Python 列表转换成 NumPy 的核心数据结构 ndarray（N 维数组）
     # next(...)——从生成器里拽出第一个结果
     query_vec = np.array(next(model.embed([query])))
 
+    if RAG_BACKEND == "pgvector":
+        return vector_store.search(query_vec, TOP_K)  # 排序在 PG 里做
+
+    if index is None:  # json 后端必须有文件版索引
+        raise ValueError("RAG_BACKEND=json 需要传入 rag_index.json 加载的 index")
     vectors = np.array(index["vectors"])  # 形状 (chunk 数, 768)
     # 余弦公式：点积 / (模长 × 模长)。一次矩阵乘算完所有 chunk 的点积
     # vectors @ query_vec: @ 是矩阵乘法。vectors 形状 (20, 768)，query_vec 形状 (768,)，相乘时 NumPy 把后者依次和每一行做点积（768 对数字两两相乘再求和）,得到形状(20,) 的一维数组——第 i 个数就是「第 i 个 chunk 与问题的点积」
@@ -163,16 +199,19 @@ def retrieve(query: str, index: dict) -> list[dict]:
 
 def ask(query: str):
     """在线管道主函数：检索 top-3 → 拼提示词 → chat 模型生成带引用的回答。"""
-    if not os.path.exists(INDEX_PATH):
-        print(f"索引不存在，请先运行: uv run python -m my_agent.rag build")
-        return
-    with open(INDEX_PATH, encoding="utf-8") as f:
-        index = json.load(f)
-    if index["model"] != EMBED_MODEL:
-        print(f"索引由 {index['model']} 构建，与当前配置 {EMBED_MODEL} 不一致，请重新 build")
-        return
+    # json 后端才需要文件版索引；pgvector 后端数据在 PG 里，跳过读文件与模型校验
+    index = None
+    if RAG_BACKEND == "json":
+        if not os.path.exists(INDEX_PATH):
+            print(f"索引不存在，请先运行: uv run python -m my_agent.rag build")
+            return
+        with open(INDEX_PATH, encoding="utf-8") as f:
+            index = json.load(f)
+        if index["model"] != EMBED_MODEL:
+            print(f"索引由 {index['model']} 构建，与当前配置 {EMBED_MODEL} 不一致，请重新 build")
+            return
 
-    # 1. 检索（Retrieval）
+    # 1. 检索（Retrieval）——retrieve 内部按 RAG_BACKEND 分流，这里无感知
     results = retrieve(query, index)
     print("[检索结果]")
     for i, r in enumerate(results, 1):
@@ -213,11 +252,14 @@ def ask(query: str):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法：")
-        print("  uv run python -m my_agent.rag build                  # 构建索引（docs/ 变更后重跑）")
+        print("  uv run python -m my_agent.rag build                  # 构建文件版索引（docs/ 变更后重跑）")
+        print("  uv run python -m my_agent.rag sync-pg                # 同语料灌库 pgvector（前置 pgvector 容器）")
         print("  uv run python -m my_agent.rag ask <问题>             # 提问，如：")
         print("      uv run python -m my_agent.rag ask 退货的钱多久能退回来")
     elif sys.argv[1] == "build":
         build_index()
+    elif sys.argv[1] == "sync-pg":
+        sync_pg()
     elif sys.argv[1] == "ask":
         if len(sys.argv) < 3:
             print("请提供问题，如：uv run python -m my_agent.rag ask 退货的钱多久能退回来")

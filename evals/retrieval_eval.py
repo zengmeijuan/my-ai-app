@@ -23,7 +23,7 @@ from pathlib import Path
 from my_agent import rag  # uv editable install，包路径免配置
 
 
-def run_case(case: dict, index: dict) -> dict:
+def run_case(case: dict, index: dict | None) -> dict:
     """跑单条：retrieve → 判定来源覆盖 → 采集名次/分数/延迟"""
     t0 = time.perf_counter()
     results = rag.retrieve(case["query"], index)
@@ -72,13 +72,18 @@ def main():
     if not cases:
         sys.exit("没有匹配的用例")
 
-    if not rag.INDEX_PATH.exists():
-        sys.exit(f"索引不存在，先运行: uv run python -m my_agent.rag build")
-    index = json.loads(rag.INDEX_PATH.read_text(encoding="utf-8"))
-    if index["model"] != rag.EMBED_MODEL:
-        sys.exit(f"索引由 {index['model']} 构建，与当前 {rag.EMBED_MODEL} 不一致，请重新 build")
+    # 后端分流：pgvector 数据在 PG（sync-pg 灌库），无需文件版索引；
+    # json 才读 rag_index.json 并校验构建模型一致
+    backend = rag.RAG_BACKEND
+    index = None
+    if backend == "json":
+        if not rag.INDEX_PATH.exists():
+            sys.exit(f"索引不存在，先运行: uv run python -m my_agent.rag build")
+        index = json.loads(rag.INDEX_PATH.read_text(encoding="utf-8"))
+        if index["model"] != rag.EMBED_MODEL:
+            sys.exit(f"索引由 {index['model']} 构建，与当前 {rag.EMBED_MODEL} 不一致，请重新 build")
 
-    print(f"被测: rag.retrieve | embed: {rag.EMBED_MODEL} | top_k: {rag.TOP_K} | 用例: {len(cases)} 条")
+    print(f"被测: rag.retrieve | backend: {backend} | embed: {rag.EMBED_MODEL} | top_k: {rag.TOP_K} | 用例: {len(cases)} 条")
     records = [run_case(c, index) for c in cases]
 
     hits = [r for r in records if r["hit"]]
@@ -91,6 +96,7 @@ def main():
         "rank_dist": rank_dist,
         "avg_best_rank": avg_rank,
         "latency_avg_s": round(sum(r["latency_s"] for r in records) / len(records), 2),
+        "backend": backend,
         "testcases_version": data["version"],
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "records": records,
