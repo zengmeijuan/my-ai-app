@@ -10,10 +10,12 @@
 
 表 doc_chunks 与 rag_index.json 的对应关系：
   JSON {"chunks": [{source, text}], "vectors": [[768 floats]]}
-    → 表 doc_chunks(id, source, text, embedding vector(768), content_hash)，行级一行一 chunk。
+    → 表 doc_chunks(id, source, text, embedding vector(768), content_hash, category)，行级一行一 chunk。
   换库不换模型：向量仍由 jina 模型产出，pgvector 只收现成向量（存 + 检索）。
   H6-2 增 content_hash 列：文档级 sha256 指纹（切块前全文算一次），同文档所有
   chunk 行共用——增量同步拿它 diff，文档不变则零计算跳过。
+  H6-3 增 category 列：文档级元数据（业务类别，值由调用方 rag.DOC_META 决定）——
+  检索可 WHERE category = %s 先过滤后排序（pre-filtering），文件版向量库没有的能力。
 
 运行前：docker compose up -d pgvector（表结构与数据可再生，sync-pg 一条命令重建）
 """
@@ -58,18 +60,20 @@ def ensure_table():
             " source text NOT NULL,"
             " text text NOT NULL,"
             f" embedding vector({DIM}) NOT NULL,"       # 维度锁死在列定义
-            " content_hash text)"                       # H6-2：文档级 sha256 指纹，同文档所有 chunk 共用
+            " content_hash text,"                       # H6-2：文档级 sha256 指纹，同文档所有 chunk 共用
+            " category text)"                           # H6-3：文档级元数据（业务类别），过滤检索的 WHERE 列
         )
         # 老表幂等升级：H6-1 灌过数据的表没有该列，ADD COLUMN IF NOT EXISTS 对已有列是空操作
         conn.execute("ALTER TABLE doc_chunks ADD COLUMN IF NOT EXISTS content_hash text")
+        conn.execute("ALTER TABLE doc_chunks ADD COLUMN IF NOT EXISTS category text")
 
 
-def sync_all(rows: list[tuple[str, str, list[float], str]]):
+def sync_all(rows: list[tuple[str, str, list[float], str, str]]):
     """全量灌库（sync-pg --full）：清表 + 批量插入。
 
-    rows: [(source, text, vector_list, content_hash)]——embedding 计算与指纹
-    计算都留在调用方（rag.py），本层只管存取：向量化模型与向量库是两个工种。
-    增量路径走 insert_chunks / delete_by_source，本函数只在 --full 时被调。
+    rows: [(source, text, vector_list, content_hash, category)]——embedding、
+    指纹、元数据都由调用方（rag.py）算好，本层只管存取：向量化模型与向量库
+    是两个工种。增量路径走 insert_chunks / delete_by_source，本函数只在 --full 时被调。
     """
     ensure_table()
     with _connect() as conn:
@@ -83,29 +87,30 @@ def _insert_rows(conn, rows):
     """批量插入公共执行体：sync_all 与 insert_chunks 共用同一条 INSERT 语句。"""
     # 批量操作，需要显式创建游标，用来执行SQL和取结果的句柄。
     with conn.cursor() as cur:
-        # executemany 把 N 组参数复用同一条 INSERT 语句，51 个 chunk 就是 51 组 (source, text, '[...]', hash)
+        # executemany 把 N 组参数复用同一条 INSERT 语句，51 个 chunk 就是 51 组 (source, text, '[...]', hash, category)
         cur.executemany(
-            "INSERT INTO doc_chunks (source, text, embedding, content_hash) VALUES (%s, %s, %s, %s)",
-            [(src, text, to_pgvec(vec), h) for src, text, vec, h in rows],
+            "INSERT INTO doc_chunks (source, text, embedding, content_hash, category) VALUES (%s, %s, %s, %s, %s)",
+            [(src, text, to_pgvec(vec), h, cat) for src, text, vec, h, cat in rows],
         )
 
 
-def insert_chunks(rows: list[tuple[str, str, list[float], str]]):
+def insert_chunks(rows: list[tuple[str, str, list[float], str, str]]):
     """增量插入（H6-2）：只插 diff 出来的新增/变更 chunk，其他文档的行原封不动。"""
     with _connect() as conn:
         _insert_rows(conn, rows)
 
 
-def fetch_hashes() -> dict[str, str | None]:
-    """库内指纹对照面：{source: content_hash}，增量 diff 的另一半。
+def fetch_hashes() -> dict[str, tuple[str | None, str | None]]:
+    """库内对照面：{source: (content_hash, category)}，增量 diff 的另一半。
 
-    同文档所有 chunk 行共用同一指纹，多行同 source 在 dict 推导里自然折叠
-    （值相同，覆盖无损）。H6-1 灌的旧行该列为 NULL——NULL 与任何新指纹都不
-    相等，首次增量同步会自动把旧行判成「变更」完成升级，无需手工迁移。
+    元组比对让 diff 同时感知两个维度：内容变（hash 不同）或元数据变（category
+    调整）都判变更、都重灌——重算产出依赖的全部输入变了就该重算（H6-3）。
+    同文档所有 chunk 行两列值都相同，多行同 source 在 dict 推导里自然折叠（覆盖无损）。
+    老行两列为 NULL——NULL 映射成 None 后与任何新值都不相等，首次增量同步自动升级。
     """
     with _connect() as conn:
-        rows = conn.execute("SELECT source, content_hash FROM doc_chunks").fetchall()
-    return {src: h for src, h in rows}
+        rows = conn.execute("SELECT source, content_hash, category FROM doc_chunks").fetchall()
+    return {src: (h, cat) for src, h, cat in rows}
 
 
 def delete_by_source(source: str) -> int:
@@ -115,8 +120,28 @@ def delete_by_source(source: str) -> int:
         return cur.rowcount  # cursor.rowcount：本条语句影响（删掉）的行数
 
 
-def search(query_vec, top_k: int) -> list[dict]:
+def update_category(source: str, category: str) -> int:
+    """仅元数据变更的轻量路径（H6-3）：一条 UPDATE 补类别，不动文本与向量。
+
+    向量 = embedding(chunk 文本)，与 category 无关——类别变了也重切重嵌，
+    就是给没变的产出付全价，违背增量初衷。IS DISTINCT FROM 让 NULL 与
+    新值正确比较（普通 != 遇 NULL 结果是 NULL 不更新），重复 UPDATE 自动 0 行幂等。
+    """
+    with _connect() as conn:
+        cur = conn.execute(
+            "UPDATE doc_chunks SET category = %s WHERE source = %s AND category IS DISTINCT FROM %s",
+            (category, source, category),
+        )
+        return cur.rowcount
+
+
+def search(query_vec, top_k: int, category: str | None = None) -> list[dict]:
     """向量检索：ORDER BY 余弦距离取 top_k，score = 1 - dist 还原为相似度。
+
+    category 非 None 时先 WHERE 过滤再排序（pre-filtering）——过滤与检索
+    进同一门查询语言一条 SQL 声明完成，这是数据库版对文件版的第③项能力
+    （json 后端要过滤得 Python 循环预筛，过程式补丁）。过滤值走 %s 参数
+    绑定、无动态列名（单列写死），天然免疫 SQL 注入。
 
     <=> 返回余弦距离（= 1 - 相似度），升序取最小 = 最相似——score 还原后
     与 rag.retrieve 的 json 后端同口径（float4 存储带来的微差 <1e-3，
@@ -124,11 +149,15 @@ def search(query_vec, top_k: int) -> list[dict]:
     返回内部模型 [{"source", "text", "score"}]——外部协议（行元组）不出本层。
     """
     v = to_pgvec(query_vec) # ① 查询向量同样走字面量协议
+    sql = "SELECT source, text, 1 - (embedding <=> %s) AS score FROM doc_chunks"
+    params = [v]  # 参数顺序与占位符出现顺序严格一致
+    if category is not None:
+        sql += " WHERE category = %s"
+        params.append(category)
+    sql += " ORDER BY embedding <=> %s LIMIT %s"
+    params += [v, top_k]
     with _connect() as conn:
         # embedding <=> v，<=> 算余弦距离，越小越相似，1 - dist 还原成相似度口径，越大越相似
-        rows = conn.execute(
-            "SELECT source, text, 1 - (embedding <=> %s) AS score"
-            " FROM doc_chunks ORDER BY embedding <=> %s LIMIT %s",
-            (v, v, top_k),  # 三占位符按序绑参
-        ).fetchall()    # 结果行全部取回，每行形如 ('退货政策.md', '## 退款时效\n原路退回…', 0.5344)
+        rows = conn.execute(sql, params).fetchall()
+        # 结果行全部取回，每行形如 ('退货政策.md', '## 退款时效\n原路退回…', 0.5344)
     return [{"source": r[0], "text": r[1], "score": float(r[2])} for r in rows]

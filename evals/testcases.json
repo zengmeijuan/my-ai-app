@@ -1,173 +1,272 @@
 {
   "version": "v2",
-  "description": "星辰商城客服 agent 固定测试集（里程碑 C 基准）。expected_points 为期望答案要点，按『正确回答中应字面出现』设计，C2 判定：全部命中=通过，未全命中交 LLM judge 二次裁定。expected_tools 为必调工具（must-call 语义）：该调的必须调，多调记录不判失败；空数组=不应调用任何工具。notes 标注 judge_required 的条目强制走 judge（v2 执行语义：要点全命中也不免检，防话术缺陷漏网——R04 教训）。retrieval_cases 为 C5 检索组件级用例：不经 LLM 直接评 rag.retrieve，expected_sources 列出必须全部被 top-3 覆盖的知识库文件，query 与 cases 中同 id 用例同题（两级证据链可比）。v2 变更：R04 回流（补 judge_required 与话术判定口径）、R13 补元回复判定口径；v1 归档见 results/testcases_v1_archive.json。",
+  "description": "星辰商城客服 agent 固定测试集（里程碑 C 基准）。expected_points 为期望答案要点，按『正确回答中应字面出现』设计，C2 判定：全部命中=通过，未全命中交 LLM judge 二次裁定。expected_tools 为必调工具（must-call 语义）：该调的必须调，多调记录不判失败；空数组=不应调用任何工具。notes 标注 judge_required 的条目强制走 judge（v2 执行语义：要点全命中也不免检，防话术缺陷漏网——R04 教训）。retrieval_cases 为 C5 检索组件级用例：不经 LLM 直接评 rag.retrieve，expected_sources 列出必须全部被 top-3 覆盖的知识库文件，query 与 cases 中同 id 用例同题（两级证据链可比）。v2 变更：R04 回流（补 judge_required 与话术判定口径）、R13 补元回复判定口径；v1 归档见 results/testcases_v1_archive.json。 H6-3 增补：retrieval_cases 支持 filter 字段（如 {\"category\": \"支付发票\"}）做元数据过滤用例（F 前缀），仅 pgvector 后端执行，json 后端 N/A 跳过。",
   "cases": [
     {
       "id": "R01",
       "category": "retrieval",
       "question": "七天无理由退货的条件是什么？",
-      "expected_points": ["吊牌完整", "配件齐全"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "吊牌完整",
+        "配件齐全"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "精确问法：step5 对照实验用例（rewrite 不应改坏规范查询）"
     },
     {
       "id": "R02",
       "category": "retrieval",
       "question": "钱多久能回来？",
-      "expected_points": ["1-3 个工作日", "3-7 个工作日"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "1-3 个工作日",
+        "3-7 个工作日"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "口语问法：rewrite 改写主战场（step5 默认题）"
     },
     {
       "id": "R03",
       "category": "retrieval",
       "question": "运费怎么算？",
-      "expected_points": ["99", "6 元"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "99",
+        "6 元"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": ""
     },
     {
       "id": "R04",
       "category": "retrieval",
       "question": "积分会过期吗？",
-      "expected_points": ["一年", "清零"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "一年",
+        "清零"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "judge_required（C6 坏例回流）：历史真实缺陷——要点全中免 judge 时答案夹带「如需归档请您那边补录」类推诿话术漏网；判定口径：要点之外不得出现把责任推给用户/流程性搪塞的话术，出现即 FAIL"
     },
     {
       "id": "R05",
       "category": "retrieval",
       "question": "信用卡分期手续费是多少？",
-      "expected_points": ["500", "结算页"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "500",
+        "结算页"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "知识库原文：星辰分期部分商品免手续费，具体以结算页显示为准"
     },
     {
       "id": "R06",
       "category": "retrieval",
       "question": "账号被冻结了怎么解除？",
-      "expected_points": ["2 小时", "验证码"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "2 小时",
+        "验证码"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": ""
     },
     {
       "id": "R07",
       "category": "retrieval",
       "question": "买了一条裙子，可以七天无理由退货吗？",
-      "expected_points": ["7 天", "吊牌"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "7 天",
+        "吊牌"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "注意区分：裙子不属于不支持退货的贴身内衣类"
     },
     {
       "id": "R08",
       "category": "retrieval",
       "question": "内衣可以七天无理由退货吗？",
-      "expected_points": ["不支持", "质量"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "不支持",
+        "质量"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "知识库：贴身内衣不支持七天无理由；质量问题不受限制"
     },
     {
       "id": "R09",
       "category": "retrieval",
       "question": "冰箱这种大件会送上门安装吗？",
-      "expected_points": ["上楼", "安装"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "上楼",
+        "安装"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": ""
     },
     {
       "id": "R10",
       "category": "retrieval",
       "question": "宇宙卡会员有什么专属权益？",
-      "expected_points": ["免运费", "专属客服", "生日礼包"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "免运费",
+        "专属客服",
+        "生日礼包"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": ""
     },
     {
       "id": "R11",
       "category": "retrieval",
       "question": "电子发票什么时候发给我？",
-      "expected_points": ["24 小时", "邮箱"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "24 小时",
+        "邮箱"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": ""
     },
     {
       "id": "R12",
       "category": "retrieval",
       "question": "忘记密码怎么办？",
-      "expected_points": ["手机"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "手机"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "知识库原文：通过手机号验证找回登录"
     },
     {
       "id": "R13",
       "category": "retrieval",
       "question": "星辰钱包里的钱可以提现吗？",
-      "expected_points": ["提现"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "提现"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "judge_required：期望表达『不可提现』，字面弱命中需 judge 把关不得答反；C6 补充元回复口径——把过程汇报当答复（如『已按知识库口径答复并写入记忆…』）= FAIL，顾客未获得任何实质内容"
     },
     {
       "id": "R14",
       "category": "retrieval",
       "question": "注销账号之后，我的数据还会保留多久？",
-      "expected_points": ["30 天"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "30 天"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": ""
     },
     {
       "id": "R15",
       "category": "retrieval",
       "question": "我用银行卡付款，退货退款几天能到账？",
-      "expected_points": ["3-7 个工作日"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "3-7 个工作日"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "跨文档：支付方式（渠道）+ 退货政策（到账时效按银行卡档）"
     },
     {
       "id": "T01",
       "category": "tool",
       "question": "台灯 45 元，小风扇 39 元，两件一共多少钱？",
-      "expected_points": ["84"],
-      "expected_tools": ["calculate"],
+      "expected_points": [
+        "84"
+      ],
+      "expected_tools": [
+        "calculate"
+      ],
       "notes": "金额必须走 calculate 工具（system prompt 明确要求），防心算"
     },
     {
       "id": "T02",
       "category": "tool",
       "question": "我购物车里的商品一共 92 元，离包邮还差多少元？",
-      "expected_points": ["7 元"],
-      "expected_tools": ["calculate"],
+      "expected_points": [
+        "7 元"
+      ],
+      "expected_tools": [
+        "calculate"
+      ],
       "notes": "允许额外调用 search_knowledge 查包邮门槛（99 元），must-call 只约束 calculate"
     },
     {
       "id": "T03",
       "category": "tool",
       "question": "我这个月消费了 1200 元，能获得多少积分？",
-      "expected_points": ["1200"],
-      "expected_tools": ["calculate"],
+      "expected_points": [
+        "1200"
+      ],
+      "expected_tools": [
+        "calculate"
+      ],
       "notes": "积分规则为每消费 1 元积 1 分"
     },
     {
       "id": "C01",
       "category": "combo",
       "question": "顾客买了 45 元的台灯和 39 元的小风扇，用微信支付。请回答：① 这单收多少运费？② 台灯无理由退货的话，寄回运费谁承担、退款几天到账？",
-      "expected_points": ["6 元", "用户承担", "1-3 个工作日"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "6 元",
+        "用户承担",
+        "1-3 个工作日"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "step1 原版工单题；45+39=84<99 收 6 元运费，calculate 可选"
     },
     {
       "id": "C02",
       "category": "combo",
       "question": "满 99 元包邮，我购物车现在有 92 元的商品，再买多少钱的商品就能免运费？",
-      "expected_points": ["7 元"],
-      "expected_tools": ["search_knowledge", "calculate"],
+      "expected_points": [
+        "7 元"
+      ],
+      "expected_tools": [
+        "search_knowledge",
+        "calculate"
+      ],
       "notes": "检索（确认门槛 99）+ 计算（99-92=7）双工具"
     },
     {
       "id": "C03",
       "category": "combo",
       "question": "我是宇宙卡会员，买一台 50 元的小台灯要收运费吗？",
-      "expected_points": ["免运费"],
-      "expected_tools": ["search_knowledge"],
+      "expected_points": [
+        "免运费"
+      ],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "跨文档推理：会员权益（宇宙卡不限次免运费）+ 配送说明（运费规则）；calculate 可选"
     },
     {
@@ -175,7 +274,9 @@
       "category": "refusal",
       "question": "星辰商城可以到店自提吗？",
       "expected_points": [],
-      "expected_tools": ["search_knowledge"],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "judge_required：知识库无此信息，期望如实告知『没有相关安排/未提供』，不得编造政策；允许检索但答案不得虚构"
     },
     {
@@ -183,7 +284,9 @@
       "category": "refusal",
       "question": "你们支持花呗付款吗？",
       "expected_points": [],
-      "expected_tools": ["search_knowledge"],
+      "expected_tools": [
+        "search_knowledge"
+      ],
       "notes": "judge_required：知识库渠道清单（微信/支付宝/银行卡/星辰钱包）无花呗，期望如实告知未支持或列出实际渠道，不得答『支持』"
     },
     {
@@ -207,92 +310,144 @@
     {
       "id": "R01",
       "query": "七天无理由退货的条件是什么？",
-      "expected_sources": ["退货政策.md"],
+      "expected_sources": [
+        "退货政策.md"
+      ],
       "notes": "规范问法，答案在『七天无理由退货的条件』小节"
     },
     {
       "id": "R02",
       "query": "钱多久能回来？",
-      "expected_sources": ["退货政策.md"],
+      "expected_sources": [
+        "退货政策.md"
+      ],
       "notes": "口语问法（退款到账），裸检索对口语的召回是 C5 主战场"
     },
     {
       "id": "R03",
       "query": "运费怎么算？",
-      "expected_sources": ["配送说明.md"],
+      "expected_sources": [
+        "配送说明.md"
+      ],
       "notes": "答案在『运费规则和免运费门槛』小节"
     },
     {
       "id": "R04",
       "query": "积分会过期吗？",
-      "expected_sources": ["会员权益.md"],
+      "expected_sources": [
+        "会员权益.md"
+      ],
       "notes": "答案在『积分规则』小节末尾（一年有效过期清零）"
     },
     {
       "id": "R05",
       "query": "信用卡分期手续费是多少？",
-      "expected_sources": ["支付方式.md"],
+      "expected_sources": [
+        "支付方式.md"
+      ],
       "notes": "答案在『分期付款』小节"
     },
     {
       "id": "R06",
       "query": "账号被冻结了怎么解除？",
-      "expected_sources": ["账号安全.md"],
+      "expected_sources": [
+        "账号安全.md"
+      ],
       "notes": "答案在『登录异常处理』小节"
     },
     {
       "id": "R07",
       "query": "买了一条裙子，可以七天无理由退货吗？",
-      "expected_sources": ["退货政策.md"],
+      "expected_sources": [
+        "退货政策.md"
+      ],
       "notes": "需同时命中条件小节（吊牌完整）与例外小节（裙子不在贴身内衣列表），单文档内跨小节"
     },
     {
       "id": "R08",
       "query": "内衣可以七天无理由退货吗？",
-      "expected_sources": ["退货政策.md"],
+      "expected_sources": [
+        "退货政策.md"
+      ],
       "notes": "答案在『不支持退货的商品』小节"
     },
     {
       "id": "R09",
       "query": "冰箱这种大件会送上门安装吗？",
-      "expected_sources": ["配送说明.md"],
+      "expected_sources": [
+        "配送说明.md"
+      ],
       "notes": "答案在『大件商品配送』小节"
     },
     {
       "id": "R10",
       "query": "宇宙卡会员有什么专属权益？",
-      "expected_sources": ["会员权益.md"],
+      "expected_sources": [
+        "会员权益.md"
+      ],
       "notes": "答案在『会员专享权益』小节"
     },
     {
       "id": "R11",
       "query": "电子发票什么时候发给我？",
-      "expected_sources": ["支付方式.md"],
+      "expected_sources": [
+        "支付方式.md"
+      ],
       "notes": "答案在『发票开具』小节"
     },
     {
       "id": "R12",
       "query": "忘记密码怎么办？",
-      "expected_sources": ["账号安全.md"],
+      "expected_sources": [
+        "账号安全.md"
+      ],
       "notes": "关键句在『密码设置建议』段落末尾——chunk 边界质量观察点：该段主体是密码建议，找回方式只是尾句"
     },
     {
       "id": "R13",
       "query": "星辰钱包里的钱可以提现吗？",
-      "expected_sources": ["支付方式.md"],
+      "expected_sources": [
+        "支付方式.md"
+      ],
       "notes": "答案在『支持的支付渠道』小节（充值不可提现）"
     },
     {
       "id": "R14",
       "query": "注销账号之后，我的数据还会保留多久？",
-      "expected_sources": ["账号安全.md"],
+      "expected_sources": [
+        "账号安全.md"
+      ],
       "notes": "答案在『账号注销』小节（30 天）"
     },
     {
       "id": "R15",
       "query": "我用银行卡付款，退货退款几天能到账？",
-      "expected_sources": ["退货政策.md"],
+      "expected_sources": [
+        "退货政策.md"
+      ],
       "notes": "核心答案（银行卡 3-7 个工作日）在『退款多久到账』；支付方式.md 仅渠道佐证非必需——跨文档场景期望只标必需项"
+    },
+    {
+      "id": "F01",
+      "query": "手续费是多少？",
+      "filter": {
+        "category": "支付发票"
+      },
+      "expected_sources": [
+        "支付方式.md"
+      ],
+      "notes": "H6-3 过滤用例（pgvector 专测，json N/A）：跨类歧义问题——「手续费」也可能指别的，限定支付发票类后 top-3 应命中支付方式.md"
+    },
+    {
+      "id": "F02",
+      "query": "积分过期规则",
+      "filter": {
+        "category": "会员积分"
+      },
+      "expected_sources": [
+        "会员权益.md"
+      ],
+      "notes": "H6-3 过滤用例：限定会员积分类，检索空间收窄后命中会员权益.md"
     }
   ]
 }

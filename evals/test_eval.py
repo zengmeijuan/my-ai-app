@@ -247,7 +247,8 @@ FAKE_RESULTS = [
 def patched_retrieve(monkeypatch):
     # my_agent.rag 模块里名叫 retrieve 的函数，临时换成一个“无论问什么、一律返回 FAKE_RESULTS”的假函数;测试结束后自动换回原货
     # lambda q, index: FAKE_RESULTS 替代品。lambda是单行匿名函数，参数名为q,index。等价于def fake_retrieve(q, index):return FAKE_RESULTS
-    monkeypatch.setattr(rag_mod, "retrieve", lambda q, index: FAKE_RESULTS)
+    # category=None 跟随 H6-3 的 retrieve 新签名（run_case 会以关键字传 category，fake 不收就 TypeError）
+    monkeypatch.setattr(rag_mod, "retrieve", lambda q, index, category=None: FAKE_RESULTS)
     return {"chunks": []}
 
 

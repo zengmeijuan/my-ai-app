@@ -24,9 +24,11 @@ from my_agent import rag  # uv editable install，包路径免配置
 
 
 def run_case(case: dict, index: dict | None) -> dict:
-    """跑单条：retrieve → 判定来源覆盖 → 采集名次/分数/延迟"""
+    """跑单条：retrieve（可带元数据过滤）→ 判定来源覆盖 → 采集名次/分数/延迟"""
+    filt = case.get("filter") or {}  # 可选 {"category": "..."}，无过滤用例为空
+    category = filt.get("category")
     t0 = time.perf_counter()
-    results = rag.retrieve(case["query"], index)
+    results = rag.retrieve(case["query"], index, category=category)
     latency = round(time.perf_counter() - t0, 2)
     """
         results = [
@@ -49,6 +51,7 @@ def run_case(case: dict, index: dict | None) -> dict:
     return {
         "id": case["id"],
         "query": case["query"],
+        "filter": filt or None,
         "expected_sources": case["expected_sources"],
         "top_k": [{"source": r["source"], "score": round(r["score"], 4)} for r in results],
         "hit": hit,
@@ -84,7 +87,13 @@ def main():
             sys.exit(f"索引由 {index['model']} 构建，与当前 {rag.EMBED_MODEL} 不一致，请重新 build")
 
     print(f"被测: rag.retrieve | backend: {backend} | embed: {rag.EMBED_MODEL} | top_k: {rag.TOP_K} | 用例: {len(cases)} 条")
-    records = [run_case(c, index) for c in cases]
+    # json 后端无过滤语义（H6-0 缺陷③）：带 filter 的用例标 N/A 跳过——不算 hit 也不进分母，
+    # 与 pgvector 的过滤用例对照即「数据库版解锁过滤能力」的实证
+    runnable = [c for c in cases if not (backend == "json" and (c.get("filter") or {}).get("category"))]
+    skipped_na = [c["id"] for c in cases if c not in runnable]
+    if skipped_na:
+        print(f"json 后端不支持过滤，N/A 跳过: {skipped_na}")
+    records = [run_case(c, index) for c in runnable]
 
     hits = [r for r in records if r["hit"]]
     rank_dist = {rank: sum(1 for r in hits if r["best_rank"] == rank) for rank in (1, 2, 3)}
@@ -97,6 +106,7 @@ def main():
         "avg_best_rank": avg_rank,
         "latency_avg_s": round(sum(r["latency_s"] for r in records) / len(records), 2),
         "backend": backend,
+        "skipped_na": skipped_na,
         "testcases_version": data["version"],
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "records": records,

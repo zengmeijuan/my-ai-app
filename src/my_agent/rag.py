@@ -68,6 +68,19 @@ API_TIMEOUT = 60       # chat API 超时秒数（与 agent.py 一致）
 # 这是「双后端评测无退化」成立的前提。外置开关 = 同一份代码两种部署形态（与 DSN 同思想）
 RAG_BACKEND = os.environ.get("RAG_BACKEND", "json")
 
+# 文档级元数据映射（H6-3）：source → 业务类别。元数据是「文档之外的知识」——
+# 正文里读不出来，必须显式登记；生产由文档系统随文档下发，学习版手工映射表。
+# 用途：入库写 doc_chunks.category 列；检索可 WHERE category 过滤（先过滤后排序）；
+# 增量 diff 对 (content_hash, category) 二元组——元数据变更也触发重灌。
+# 唯一事实源：tools.py 的 search_knowledge 类别 enum 从这里派生。
+DOC_META = {
+    "会员权益.md": "会员积分",
+    "支付方式.md": "支付发票",
+    "退货政策.md": "售后退货",
+    "账号安全.md": "账号安全",
+    "配送说明.md": "配送运费",
+}
+
 # 懒加载单例模式：embedding 模型很重（161M 参数），全进程只加载一次，之后处处复用
 _model = None
 
@@ -140,11 +153,19 @@ def sync_pg(full: bool = False):
     """离线管道 pgvector 版：语料 → 指纹 diff → 按需向量化 → 灌库 doc_chunks。
 
     H6-2 增量更新：每个文档算 content_hash（sha256，算在切块前的原始全文上，
-    同一文档所有 chunk 共用一个指纹，文档一个字没动指纹就不变）。与库内指纹
+    同一文档所有 chunk 共用一个指纹，文档一个字没动指纹就不变）。与库内对照面
     diff 出四类处置：
       新增（库无盘有）→ 向量化插入；
-      变更（指纹不同）→ DELETE 旧行 + 插新行——chunk 集合是整体替换语义
+      变更 → DELETE 旧行 + 插新行——chunk 集合是整体替换语义
         （新切块结果行数都可能不同），DELETE+INSERT 比 逐行 UPDATE 干净；
+      删除（库有盘无）→ 清行；
+      不变 → 跳过，零计算（连 embedding 模型都不加载）。
+    H6-3 变更判定升级为 (content_hash, category) 二元组，并按「产出依赖哪些
+    输入」分层处置（变更类型决定重算范围）：
+      新增（库无盘有）→ 向量化插入；
+      内容变更（hash 不同）→ DELETE 旧行 + 重切重嵌——向量依赖正文，必须重算；
+      类别变更（hash 同、category 不同）→ 一条 UPDATE 补列，不碰模型——向量
+        与类别无关，重嵌就是给没变的产出付全价；
       删除（库有盘无）→ 清行；
       不变 → 跳过，零计算（连 embedding 模型都不加载）。
     --full 退回全量重建（TRUNCATE 重灌），首次升级 / 怀疑库脏时的兜底。
@@ -158,8 +179,11 @@ def sync_pg(full: bool = False):
     if not docs_text:
         print(f"未在 {DOCS_DIR}/ 找到任何 .md 文件，先创建语料")
         return
+    missing_meta = [s for s in docs_text if s not in DOC_META]
+    if missing_meta:  # 新文档没登记类别：静默兜底会错标，显式失败逼登记
+        sys.exit(f"错误：以下文档未在 DOC_META 登记类别，请先补映射：{missing_meta}")
     new_hashes = {
-        src: hashlib.sha256(text.encode("utf-8")).hexdigest()
+        src: (hashlib.sha256(text.encode("utf-8")).hexdigest(), DOC_META[src])
         for src, text in docs_text.items()
     }
 
@@ -168,32 +192,38 @@ def sync_pg(full: bool = False):
         vector_store.sync_all(_embed_rows(sorted(docs_text), new_hashes))
         return
 
-    # ---- 增量 diff：磁盘新指纹 vs 库内旧指纹 ----
+    # ---- 增量 diff：磁盘新状态 (hash, category) vs 库内旧状态，三路分层 ----
     # 全量路径的建表/加列在 sync_all 里；增量路径先自己确保表结构升级（幂等）
     vector_store.ensure_table()
     old_hashes = vector_store.fetch_hashes()
-    added   = [s for s in new_hashes if s not in old_hashes]                      # 库无盘有
-    changed = [s for s in new_hashes if s in old_hashes and old_hashes[s] != new_hashes[s]]  # 指纹不同（含旧行 NULL）
-    removed = [s for s in old_hashes if s not in new_hashes]                      # 库有盘无
+    added           = [s for s in new_hashes if s not in old_hashes]                            # 库无盘有
+    content_changed = [s for s in new_hashes if s in old_hashes and old_hashes[s][0] != new_hashes[s][0]]  # 正文变
+    meta_changed    = [s for s in new_hashes if s in old_hashes and old_hashes[s][0] == new_hashes[s][0]
+                       and old_hashes[s][1] != new_hashes[s][1]]                                # 仅类别变
+    removed         = [s for s in old_hashes if s not in new_hashes]                            # 库有盘无
 
     for src in removed:
         n = vector_store.delete_by_source(src)
         print(f"  - 已删除 {src}（清掉 {n} 个旧 chunk）")
 
-    targets = added + changed
+    for src in meta_changed:  # 轻量路径：纯列更新，模型不加载
+        n = vector_store.update_category(src, new_hashes[src][1])
+        print(f"  - 类别变更 {src}（UPDATE {n} 行，未重新向量化）")
+
+    targets = added + content_changed
     if targets:
-        for src in changed:  # 变更先删旧行，再随新增一起插（见 docstring：整体替换语义）
+        for src in content_changed:  # 正文变走重型路径：先删旧行，再随新增一起插（整体替换语义）
             vector_store.delete_by_source(src)
         vector_store.insert_chunks(_embed_rows(targets, new_hashes))
     else:
-        print("  无新增/变更，跳过向量化（embedding 模型未加载）")
+        print("  无需重新向量化（embedding 模型未加载）")
 
-    unchanged = len(new_hashes) - len(added) - len(changed)
-    print(f"增量同步完成：新增 {len(added)} / 变更 {len(changed)} / 删除 {len(removed)} / 不变跳过 {unchanged}")
+    unchanged = len(new_hashes) - len(added) - len(content_changed) - len(meta_changed)
+    print(f"增量同步完成：新增 {len(added)} / 内容变更 {len(content_changed)} / 类别变更 {len(meta_changed)} / 删除 {len(removed)} / 不变跳过 {unchanged}")
 
 
-def _embed_rows(sources: list[str], hashes: dict[str, str]) -> list[tuple[str, str, list[float], str]]:
-    """把 diff 出的目标文档切块并向量化 → 待插行 [(source, text, vector, hash)]。
+def _embed_rows(sources: list[str], hashes: dict[str, tuple[str, str]]) -> list[tuple[str, str, list[float], str, str]]:
+    """把 diff 出的目标文档切块并向量化 → 待插行 [(source, text, vector, hash, category)]。
 
     load_chunks 切全量再按 source 过滤——51 个 chunk 的切块是毫秒级开销，
     不值得为省它另写一套按文档切块。模型懒加载在此处触发：纯删除或全不变
@@ -203,15 +233,19 @@ def _embed_rows(sources: list[str], hashes: dict[str, str]) -> list[tuple[str, s
     chunks = [c for c in load_chunks() if c["source"] in targets]
     model = get_embed_model()
     return [
-        (c["source"], c["text"], v.tolist(), hashes[c["source"]])
+        (c["source"], c["text"], v.tolist(), *hashes[c["source"]])  # * 解包把 (hash, category) 元组摊平进五元组
         for c, v in zip(chunks, model.embed([c["text"] for c in chunks]))
     ]
 
 
 # ============== 3. 在线管道：问题 → 检索 → 生成 ==============
 
-def retrieve(query: str, index: dict | None) -> list[dict]:
+def retrieve(query: str, index: dict | None, category: str | None = None) -> list[dict]:
     """在索引里找与 query 最相似的 top_k 个 chunk（按 RAG_BACKEND 分流）。
+
+    category 非 None 时按元数据先过滤后排序（H6-3）——只有 pgvector 分支
+    支持（WHERE 下推 SQL）；json 分支显式报错而非静默忽略：调用方以为过滤了
+    其实没滤，是最危险的静默 bug，失败要败在调用点看得见的地方。
 
     相似度用余弦（cosine）：两向量夹角的余弦值，只看方向不看长度，
     取值 -1~1，越大越相似。文本没法直接算距离，都先转成向量再比。
@@ -226,7 +260,10 @@ def retrieve(query: str, index: dict | None) -> list[dict]:
     query_vec = np.array(next(model.embed([query])))
 
     if RAG_BACKEND == "pgvector":
-        return vector_store.search(query_vec, TOP_K)  # 排序在 PG 里做
+        return vector_store.search(query_vec, TOP_K, category=category)  # 排序（和过滤）在 PG 里做
+
+    if category is not None:
+        raise ValueError("RAG_BACKEND=json 不支持 category 元数据过滤（无过滤语义，H6-0 缺陷③）；传 category=None 或切换 pgvector 后端")
 
     if index is None:  # json 后端必须有文件版索引
         raise ValueError("RAG_BACKEND=json 需要传入 rag_index.json 加载的 index")

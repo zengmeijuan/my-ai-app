@@ -224,30 +224,54 @@ def grep(pattern: str, path: str = ".") -> str:
     return f"共 {len(matches)} 处匹配:\n" + "\n".join(matches)
 
 
-# 知识库索引缓存：与 rag.py 的 _model 同款懒加载单例——工具第一次被调用才读盘
+# 知识库索引缓存：与 rag.py 的 _model 同款懒加载单例——工具第一次被调用才读盘。
+# 仅 json 后端使用（H6-3 接线后 pgvector 分支数据在 PG，不碰该文件）
 _knowledge_index = None
+
+# 类别 enum 从 rag.DOC_META 派生（唯一事实源，加文档登记新类别自动跟进 schema）
+_KNOWLEDGE_CATEGORIES = tuple(sorted(set(rag.DOC_META.values())))
 
 
 @tool(
     "search_knowledge",
-    "在「星辰商城」客服知识库中检索资料，返回最相关的知识片段及来源。当用户咨询星辰商城的退货、退款、配送、运费、会员、积分、支付、发票、账号、密码等问题时调用。注意：查本项目的代码文件应使用 read_file/grep，不要用本工具。",
+    "在「星辰商城」客服知识库中检索资料，返回最相关的知识片段及来源。当用户咨询星辰商城的退货、退款、配送、运费、会员、积分、支付、发票、账号、密码等问题时调用。问题明确属于某一类别时可传 category 缩小检索范围（先过滤后排序，结果更准），不确定则不传。注意：查本项目的代码文件应使用 read_file/grep，不要用本工具。",
     required=("query",),
     query={"type": "string", "description": "检索问题，用完整的自然语言句子，如「退款多久到账」"},
+    category={
+        "type": "string",
+        "enum": list(_KNOWLEDGE_CATEGORIES),
+        "description": "可选，按业务类别限定检索范围。可选值：" + "、".join(_KNOWLEDGE_CATEGORIES),
+    },
 )
-def search_knowledge(query: str) -> str:
-    """返回知识库中与问题最相关的 top-3 资料（带来源文件名+相似度）。"""
-    global _knowledge_index
-    if _knowledge_index is None:
-        if not os.path.exists(rag.INDEX_PATH):
-            return "错误：知识库索引不存在，请让用户先运行: uv run python rag.py build"
-        with open(rag.INDEX_PATH, encoding="utf-8") as f:
-            _knowledge_index = json.load(f)
-        if _knowledge_index["model"] != rag.EMBED_MODEL:
-            _knowledge_index = None  # 不缓存错误索引，避免后续调用反复用它出错
-            return "错误：索引由其他 embedding 模型构建，请让用户重新运行 rag.py build"
+def search_knowledge(query: str, category: str = "") -> str:
+    """返回知识库中与问题最相关的 top-3 资料（带来源文件名+相似度）。
 
-    # 核心复用：rag.retrieve 用同一个 embedding 模型把问题向量化，算余弦取 top-3
-    results = rag.retrieve(query, _knowledge_index)
+    H6-3 接线：按 rag.RAG_BACKEND 分流——pgvector 后端数据在 PG，直接检索
+    不读 JSON 文件（旧版硬编码读 rag_index.json，pgvector 模式下有假失败：
+    只跑过 sync-pg 的新环境会误报「索引不存在」，其实根本不需要 JSON）；
+    json 后端维持原读文件逻辑。
+    """
+    global _knowledge_index
+    index = None
+    if rag.RAG_BACKEND != "pgvector":
+        # json 后端：维持原读文件逻辑；pgvector 后端 index 保持 None，
+        # retrieve 内部走 vector_store.search（数据在 doc_chunks 表，不碰 JSON）
+        if _knowledge_index is None:
+            if not os.path.exists(rag.INDEX_PATH):
+                return "错误：知识库索引不存在，请让用户先运行: uv run python rag.py build"
+            with open(rag.INDEX_PATH, encoding="utf-8") as f:
+                _knowledge_index = json.load(f)
+            if _knowledge_index["model"] != rag.EMBED_MODEL:
+                _knowledge_index = None  # 不缓存错误索引，避免后续调用反复用它出错
+                return "错误：索引由其他 embedding 模型构建，请让用户重新运行 rag.py build"
+        index = _knowledge_index
+
+    try:
+        # 核心复用：rag.retrieve 用同一个 embedding 模型把问题向量化，算余弦取 top-3；
+        # category 透传做元数据过滤（json 后端 + category 会在 retrieve 内显式报错）
+        results = rag.retrieve(query, index, category=category or None)
+    except ValueError as e:
+        return f"错误：{e}"
     blocks = [
         f"资料[{i}]（来源：{r['source']}，相似度 {r['score']:.4f}）\n{r['text']}"
         for i, r in enumerate(results, 1)
