@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0  # 注意：此仓库只打具体版本 tag，无 v10 聚合 major tag
       - run: uv sync --frozen  # 按 uv.lock 锁版本装环境，CI 与本地完全一致
       - run: uv run pytest evals/ -q  # 评测器自身 23 条单测（裁判先自证可信）
       - run: uv run python src/security_serve/step6_db_tool_check.py  # H1 确定性 12 断言（SQLite 零外部依赖）
@@ -48,7 +48,7 @@ jobs:
       RAG_BACKEND: pgvector
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0  # 注意：此仓库只打具体版本 tag，无 v10 聚合 major tag
       - run: uv sync --frozen
       - run: uv run python -m my_agent.rag sync-pg  # 空库增量同步 = 首次全量灌入（fastembed 模型现下 ~161M）
       - run: uv run python evals/retrieval_eval.py
@@ -80,7 +80,7 @@ jobs:
       MODEL: ${{ secrets.MODEL }}
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.4.0  # 注意：此仓库只打具体版本 tag，无 v10 聚合 major tag
       - run: uv sync --frozen
       - run: uv run python -m my_agent.rag sync-pg
       - run: uv run python evals/eval.py
