@@ -1,0 +1,87 @@
+# CI 评测门禁（H7）：把 C 阶段评测资产接进流水线，评测数字拥有阻止合并的权力。
+#
+# 三 job 分层（与评测体系的分层证据链同构，便宜的先拦、贵的只拦漏网的）：
+#   unit      免费层主闸：评测器单测 + 确定性 step 断言——零 API 成本，push / PR 都跑
+#   retrieval 检索层闸：service 容器起 pgvector → sync-pg 灌库 → 组件级评测硬卡 17/17
+#             （检索是纯函数确定性可复现，不达标必然是代码坏了）
+#   e2e       行为层闸：真 LLM 跑 25 条端到端，阈值 24（LLM 方差容忍 1 条）——
+#             仅 PR 触发（门禁拦的就是合并，日常 push 不烧钱），且免费层与检索层
+#             先过才开跑（needs 链）
+#
+# 密钥经 GitHub Secrets 注入（Settings → Secrets and variables → Actions 逐个登记），
+# .env 永不进仓库——地址与密钥是环境问题，注入解决（与 REDIS_URL / PG_DSN 同一思想）。
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --frozen  # 按 uv.lock 锁版本装环境，CI 与本地完全一致
+      - run: uv run pytest evals/ -q  # 评测器自身 23 条单测（裁判先自证可信）
+      - run: uv run python src/security_serve/step6_db_tool_check.py  # H1 确定性 12 断言（SQLite 零外部依赖）
+
+  retrieval:
+    runs-on: ubuntu-latest
+    services:  # job 级 sidecar 容器：与 compose 的 pgvector 同镜像，health 通过才放行 steps
+      pgvector:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: rag
+          POSTGRES_PASSWORD: rag
+          POSTGRES_DB: ragdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rag"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PG_DSN: postgresql://rag:rag@localhost:5432/ragdb
+      RAG_BACKEND: pgvector
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --frozen
+      - run: uv run python -m my_agent.rag sync-pg  # 空库增量同步 = 首次全量灌入（fastembed 模型现下 ~161M）
+      - run: uv run python evals/retrieval_eval.py
+      - run: uv run python evals/gate_check.py --metric hit --min 17  # 确定性硬卡满分
+
+  e2e:
+    if: github.event_name == 'pull_request'
+    needs: [unit, retrieval]
+    runs-on: ubuntu-latest
+    services:
+      pgvector:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: rag
+          POSTGRES_PASSWORD: rag
+          POSTGRES_DB: ragdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rag"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PG_DSN: postgresql://rag:rag@localhost:5432/ragdb
+      RAG_BACKEND: pgvector
+      API_KEY: ${{ secrets.API_KEY }}       # eval.py → my_agent.agent 的 LLM 网关配置
+      BASE_URL: ${{ secrets.BASE_URL }}
+      MODEL: ${{ secrets.MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --frozen
+      - run: uv run python -m my_agent.rag sync-pg
+      - run: uv run python evals/eval.py
+      - run: uv run python evals/gate_check.py --metric pass --min 24  # 方差容忍：25 条挂 1 条放行
