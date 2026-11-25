@@ -20,6 +20,12 @@ on:
 jobs:
   unit:
     runs-on: ubuntu-latest
+    env:  # dummy 凭证：评测器单测全走 FakeLLM 真客户端从不被调，但 import 链上 agent.py
+          # 模块级 os.environ["API_KEY"] 硬取——本地靠 .env 喂上、CI 无 .env 会收集期即炸。
+          # 给假 key 只为让客户端对象构造通过，不改产品代码、不掩盖生产缺配置 fail-fast 语义
+      API_KEY: dummy-key-for-unit-tests
+      BASE_URL: https://api.openai.com/v1
+      MODEL: gpt-4o-mini
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.4.0  # 注意：此仓库只打具体版本 tag，无 v10 聚合 major tag
