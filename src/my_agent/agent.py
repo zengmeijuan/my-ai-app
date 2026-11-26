@@ -174,7 +174,9 @@ _knowledge_index = None
 def search_knowledge(query: str) -> str:
     """返回知识库中与问题最相关的 top-3 资料（带来源文件名+相似度）。"""
     global _knowledge_index
-    if _knowledge_index is None:
+    # json 后端才需要文件版索引；pgvector 数据在 PG 里，跳过文件检查——
+    # 与 rag.ask() 同款分流（CI 干净环境无遗留索引文件，无条件检查会拦死检索，H7-3b）
+    if _knowledge_index is None and rag.RAG_BACKEND == "json":
         if not os.path.exists(rag.INDEX_PATH):
             return "错误：知识库索引不存在，请让用户先运行: uv run python rag.py build"
         with open(rag.INDEX_PATH, encoding="utf-8") as f:
@@ -183,7 +185,8 @@ def search_knowledge(query: str) -> str:
             _knowledge_index = None  # 不缓存错误索引，避免后续调用反复用它出错
             return "错误：索引由其他 embedding 模型构建，请让用户重新运行 rag.py build"
 
-    # 核心复用：rag.retrieve 用同一个 embedding 模型把问题向量化，算余弦取 top-3
+    # 核心复用：rag.retrieve 用同一个 embedding 模型把问题向量化，算余弦取 top-3；
+    # pgvector 时 index=None，retrieve 内部按 RAG_BACKEND 分流查 PG（与 rag.ask 传 None 一致）
     results = rag.retrieve(query, _knowledge_index)
     blocks = [
         f"资料[{i}]（来源：{r['source']}，相似度 {r['score']:.4f}）\n{r['text']}"
