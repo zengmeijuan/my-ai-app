@@ -30,3 +30,6 @@ shop.db
 
 # H5 结构化日志（运行观测数据，逐条 JSON；聚合查询的数据源）
 server.jsonl
+
+# 本地 Claude skills 安装物（工作类工具装进了项目 .claude，与本项目无关不进库）
+.claude/skills/
