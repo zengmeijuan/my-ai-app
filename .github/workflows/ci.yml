@@ -1,20 +1,23 @@
 # CI 评测门禁（H7）：把 C 阶段评测资产接进流水线，评测数字拥有阻止合并的权力。
 #
 # 三 job 分层（与评测体系的分层证据链同构，便宜的先拦、贵的只拦漏网的）：
-#   unit      免费层主闸：评测器单测 + 确定性 step 断言——零 API 成本，push / PR 都跑
+#   unit      免费层主闸：评测器单测 + 确定性 step 断言——零 API 成本
 #   retrieval 检索层闸：service 容器起 pgvector → sync-pg 灌库 → 组件级评测硬卡 17/17
 #             （检索是纯函数确定性可复现，不达标必然是代码坏了）
 #   e2e       行为层闸：真 LLM 跑 25 条端到端，阈值 24（LLM 方差容忍 1 条）——
-#             仅 PR 触发（门禁拦的就是合并，日常 push 不烧钱），且免费层与检索层
-#             先过才开跑（needs 链）
+#             免费层与检索层先过才开跑（needs 链）
+#
+# 只用 pull_request 单触发器（教训）：workflow 同时声明 push + pull_request 时，
+# PR 的 check 名被 GitHub 加 (pull_request) 消歧后缀（如 "CI / unit (pull_request)"），
+# 而 branch protection 必需检查的下拉候选只列裸名（来自 push run 的 legacy context）——
+# 裸名要求 vs 带后缀报告永不匹配，required checks 空转、merge 永远 blocked。
+# 代价：master 直接 push 不跑 CI——门禁主战场就是 PR，可接受。
 #
 # 密钥经 GitHub Secrets 注入（Settings → Secrets and variables → Actions 逐个登记），
 # .env 永不进仓库——地址与密钥是环境问题，注入解决（与 REDIS_URL / PG_DSN 同一思想）。
 name: CI
 
 on:
-  push:
-    branches: [master]
   pull_request:
 
 jobs:
