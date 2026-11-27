@@ -138,7 +138,7 @@
 - [x] H4 Redis 会话外置：server.py 内存 dict 换 Redis（TTL 管时效、多副本共享）→ 验证：重启服务后第二轮还能答出上一轮说过的事实（step8 验收：存储机制确定性断言 + 两独立进程模拟副本读同一存储 + 手动重启演示；防腐层 session_store 全项目唯一 Redis 依赖点、Budget to_dict/from_dict 序列化边界、SET ex 原子挂滑动 TTL、compose 探针+就绪依赖+URL 注入）
 - [x] H5 可观测性：logging 升级 JSON 结构化日志，FastAPI 中间件生成 request_id 贯穿调用链，计时中间件统计延迟分位数 → 验证：能回答「某时段 p95 延迟多少、哪个工具最慢、哪个会话最烧钱」三个问题（step9 三验物收口：p50≈3.0s p95≈7.0s 长尾实证；tool_call 耗时归因 LLM≈6.4s vs 工具≈0.1ms；request_id join 缝合 chat_in↔llm_usage 定位最烧钱会话；llm_usage 真 tokens 入账——stream_options 网关兼容实证、Budget 双口径对账 tools schema 漏计占 85%）
 - [x] H6 向量库替换：rag_index.json → pgvector（compose 编排独立向量库进程 + vector_store 防腐层全项目唯一 psycopg 依赖点 + 双后端分流——换库不换模型），增量更新（content_hash 文档级指纹，三路 diff：正文变重嵌 / 仅类别变一条 UPDATE 不重嵌 / 不变跳过），元数据过滤（category 列 + pre-filtering 一条 SQL 先过滤后排序，search_knowledge 把检索范围决策移交模型，enum 从 DOC_META 派生）→ 验证：组件级检索双后端 hit@3 17/17 排名逐位一致；端到端 C 阶段评测集 25/25 无退化（retrieval 15/15 tool 3/3 combo 3/3 refusal 2/2 chitchat 2/2）
-- [ ] H7 CI 评测门禁：GitHub Actions 每次提交跑 eval.py，不达标不合并 → 验证：故意改坏 prompt 触发评测失败并阻止合并（C 阶段资产流程化）
+- [x] H7 CI 评测门禁：GitHub Actions PR 上跑 eval.py，不达标不合并（三 job 分层：unit 评测器单测+确定性断言免费层 / retrieval 容器化检索 17/17 硬卡 / e2e 真 LLM 25 条阈值 24 方差容忍 1 条，needs 链便宜先拦贵的只拦漏网的；gate_check 读结果 JSON 数字判定不靠退出码；密钥走 GitHub Secrets）→ 验证：故意改坏 prompt（往被测图 step1_graph 的 SYSTEM_PROMPT_BASE 注入禁止工具指令）触发 e2e 跌破 24，gate_check 拦截（run#8），revert 后回绿（run#9）——红绿对照实证「门禁抓得住真实退化、对不相关变化宽容」；门禁物理层 branch protection 三必需检查 + 管理员不可绕过，实测 PR clean 放行（踩平双触发器消歧后缀与「触发器判定以 master 版本为准」的死锁两怪癖）；意外收获：CI 干净容器逼出 search_knowledge 漏跟 pgvector 的真 bug（本地遗留索引文件假通过）
 
 概念层（不动手、面试能说清即可）：微调决策树（知识常更新走 RAG、风格与领域黑话走微调 SFT/LoRA、通用能力换大模型）、模型分级路由与降级（小模型分类、大模型决策）、任务队列与长任务异步、认证限流（G5 笔记 §8 清单）。
 
